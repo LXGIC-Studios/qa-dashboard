@@ -11,11 +11,16 @@ interface AddProjectModalProps {
   onAdded: () => void;
 }
 
-export function AddProjectModal({ open, onClose, onAdded }: AddProjectModalProps) {
+export function AddProjectModal({
+  open,
+  onClose,
+  onAdded,
+}: AddProjectModalProps) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [platform, setPlatform] = useState<Platform>("web");
   const [status, setStatus] = useState<ProjectStatus>("active");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -26,15 +31,15 @@ export function AddProjectModal({ open, onClose, onAdded }: AddProjectModalProps
     }
   }, [open]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
     const slug = name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
 
-    addProject({
-      id: `proj-${Date.now()}`,
+    await addProject({
       name,
       slug,
       url: url || undefined,
@@ -42,6 +47,7 @@ export function AddProjectModal({ open, onClose, onAdded }: AddProjectModalProps
       status,
     });
 
+    setSaving(false);
     onAdded();
     onClose();
   };
@@ -120,7 +126,8 @@ export function AddProjectModal({ open, onClose, onAdded }: AddProjectModalProps
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm rounded-lg bg-accent text-black font-medium hover:bg-accent/90 transition-colors"
+            disabled={saving}
+            className="px-4 py-2 text-sm rounded-lg bg-accent text-black font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
           >
             Add Project
           </button>

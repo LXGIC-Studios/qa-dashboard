@@ -2,61 +2,68 @@
 
 import { useState, useEffect } from "react";
 import { Modal } from "./modal";
-import type { Bug, Severity, BugStatus } from "@/lib/types";
-import { getProjects } from "@/lib/store";
+import type { Bug, Severity, BugStatus, Profile } from "@/lib/types";
 
 interface BugModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (bug: Bug) => void;
+  onSave: (bug: {
+    title: string;
+    description: string;
+    severity: Severity;
+    status: BugStatus;
+    steps_to_reproduce?: string;
+    assigned_to?: string;
+    project_id: string;
+  }) => void;
   bug?: Bug | null;
   projectId?: string;
+  profiles?: Profile[];
 }
 
-export function BugModal({ open, onClose, onSave, bug, projectId }: BugModalProps) {
+export function BugModal({
+  open,
+  onClose,
+  onSave,
+  bug,
+  projectId,
+  profiles = [],
+}: BugModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState<Severity>("medium");
   const [status, setStatus] = useState<BugStatus>("open");
-  const [selectedProjectId, setSelectedProjectId] = useState(projectId || "");
   const [stepsToReproduce, setStepsToReproduce] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
-  const projects = typeof window !== "undefined" ? getProjects() : [];
 
   useEffect(() => {
     if (bug) {
       setTitle(bug.title);
-      setDescription(bug.description);
+      setDescription(bug.description || "");
       setSeverity(bug.severity);
       setStatus(bug.status);
-      setSelectedProjectId(bug.projectId);
-      setStepsToReproduce(bug.stepsToReproduce || "");
-      setAssignedTo(bug.assignedTo || "");
+      setStepsToReproduce(bug.steps_to_reproduce || "");
+      setAssignedTo(bug.assigned_to || "");
     } else {
       setTitle("");
       setDescription("");
       setSeverity("medium");
       setStatus("open");
-      setSelectedProjectId(projectId || "");
       setStepsToReproduce("");
       setAssignedTo("");
     }
-  }, [bug, projectId, open]);
+  }, [bug, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const now = new Date().toISOString();
     onSave({
-      id: bug?.id || `bug-${Date.now()}`,
-      projectId: selectedProjectId,
       title,
       description,
       severity,
       status,
-      stepsToReproduce: stepsToReproduce || undefined,
-      assignedTo: assignedTo || undefined,
-      createdAt: bug?.createdAt || now,
-      updatedAt: now,
+      steps_to_reproduce: stepsToReproduce || undefined,
+      assigned_to: assignedTo || undefined,
+      project_id: projectId || bug?.project_id || "",
     });
     onClose();
   };
@@ -68,7 +75,9 @@ export function BugModal({ open, onClose, onSave, bug, projectId }: BugModalProp
     <Modal open={open} onClose={onClose} title={bug ? "Edit Bug" : "New Bug"}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">Title</label>
+          <label className="block text-xs font-medium text-muted mb-1.5">
+            Title
+          </label>
           <input
             type="text"
             value={title}
@@ -80,7 +89,9 @@ export function BugModal({ open, onClose, onSave, bug, projectId }: BugModalProp
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">Description</label>
+          <label className="block text-xs font-medium text-muted mb-1.5">
+            Description
+          </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -92,7 +103,9 @@ export function BugModal({ open, onClose, onSave, bug, projectId }: BugModalProp
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Severity</label>
+            <label className="block text-xs font-medium text-muted mb-1.5">
+              Severity
+            </label>
             <select
               value={severity}
               onChange={(e) => setSeverity(e.target.value as Severity)}
@@ -105,7 +118,9 @@ export function BugModal({ open, onClose, onSave, bug, projectId }: BugModalProp
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Status</label>
+            <label className="block text-xs font-medium text-muted mb-1.5">
+              Status
+            </label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as BugStatus)}
@@ -119,25 +134,6 @@ export function BugModal({ open, onClose, onSave, bug, projectId }: BugModalProp
           </div>
         </div>
 
-        {!projectId && (
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Project</label>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className={inputClass}
-              required
-            >
-              <option value="">Select a project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
         <div>
           <label className="block text-xs font-medium text-muted mb-1.5">
             Steps to Reproduce
@@ -146,19 +142,26 @@ export function BugModal({ open, onClose, onSave, bug, projectId }: BugModalProp
             value={stepsToReproduce}
             onChange={(e) => setStepsToReproduce(e.target.value)}
             className={`${inputClass} min-h-[60px] resize-y`}
-            placeholder="1. Go to...\n2. Click on...\n3. Observe..."
+            placeholder={"1. Go to...\n2. Click on...\n3. Observe..."}
           />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">Assigned To</label>
-          <input
-            type="text"
+          <label className="block text-xs font-medium text-muted mb-1.5">
+            Assign To
+          </label>
+          <select
             value={assignedTo}
             onChange={(e) => setAssignedTo(e.target.value)}
             className={inputClass}
-            placeholder="Team member name"
-          />
+          >
+            <option value="">Unassigned</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.full_name} ({p.email})
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex justify-end gap-2 pt-2">

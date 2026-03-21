@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Modal } from "./modal";
 import { Search, Loader2, Github, Globe, Lock, Check } from "lucide-react";
 import { getProjects, addProjects } from "@/lib/store";
-import type { Project, Platform } from "@/lib/types";
+import type { Platform } from "@/lib/types";
 
 interface GitHubRepo {
   id: number;
@@ -37,10 +37,19 @@ function detectPlatform(repo: GitHubRepo): Platform {
   const topics = repo.topics.map((t) => t.toLowerCase());
   const allText = [nameLower, ...topics].join(" ");
 
-  if (allText.includes("ios") || allText.includes("swift") || allText.includes("swiftui")) {
+  if (
+    allText.includes("ios") ||
+    allText.includes("swift") ||
+    allText.includes("swiftui")
+  ) {
     return "ios";
   }
-  if ((allText.includes("app") && !allText.includes("web")) || allText.includes("mobile") || allText.includes("react-native") || allText.includes("flutter")) {
+  if (
+    (allText.includes("app") && !allText.includes("web")) ||
+    allText.includes("mobile") ||
+    allText.includes("react-native") ||
+    allText.includes("flutter")
+  ) {
     return "ios";
   }
   return "web";
@@ -59,39 +68,50 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diffDays / 365)}y ago`;
 }
 
-export function GitHubImportModal({ open, onClose, onImported }: GitHubImportModalProps) {
+export function GitHubImportModal({
+  open,
+  onClose,
+  onImported,
+}: GitHubImportModalProps) {
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [importing, setImporting] = useState(false);
-
-  const existingSlugs = useMemo(() => {
-    if (!open) return new Set<string>();
-    return new Set(getProjects().map((p) => p.slug));
-  }, [open]);
+  const [existingSlugs, setExistingSlugs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
-    setError(null);
-    setSelected(new Set());
-    setSearch("");
 
-    fetch("https://api.github.com/orgs/LXGIC-Studios/repos?per_page=100&sort=updated")
-      .then((res) => {
+    async function load() {
+      setLoading(true);
+      setError(null);
+      setSelected(new Set());
+      setSearch("");
+
+      try {
+        const projects = await getProjects();
+        setExistingSlugs(new Set(projects.map((p) => p.slug)));
+      } catch {
+        // ignore
+      }
+
+      try {
+        const res = await fetch(
+          "https://api.github.com/orgs/LXGIC-Studios/repos?per_page=100&sort=updated"
+        );
         if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
-        return res.json();
-      })
-      .then((data: GitHubRepo[]) => {
+        const data: GitHubRepo[] = await res.json();
         setRepos(data.filter((r) => !r.archived));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fetch");
+      } finally {
         setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+      }
+    }
+
+    load();
   }, [open]);
 
   const filtered = useMemo(() => {
@@ -120,7 +140,6 @@ export function GitHubImportModal({ open, onClose, onImported }: GitHubImportMod
   const selectAll = () => {
     const importable = filtered.filter((r) => !existingSlugs.has(r.name));
     if (importable.every((r) => selected.has(r.id))) {
-      // Deselect all filtered importable
       setSelected((prev) => {
         const next = new Set(prev);
         for (const r of importable) next.delete(r.id);
@@ -135,25 +154,29 @@ export function GitHubImportModal({ open, onClose, onImported }: GitHubImportMod
     }
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     setImporting(true);
     const selectedRepos = repos.filter((r) => selected.has(r.id));
-    const newProjects: Project[] = selectedRepos.map((repo) => ({
-      id: `proj-${Date.now()}-${repo.id}`,
+    const newProjects = selectedRepos.map((repo) => ({
       name: formatRepoName(repo.name),
       slug: repo.name,
       url: repo.homepage || repo.html_url,
-      platform: detectPlatform(repo),
+      github_url: repo.html_url,
+      platform: detectPlatform(repo) as "web" | "ios" | "both",
       status: "active" as const,
+      language: repo.language || undefined,
+      description: repo.description || undefined,
     }));
 
-    addProjects(newProjects);
+    await addProjects(newProjects);
     setImporting(false);
     onImported();
     onClose();
   };
 
-  const importableCount = filtered.filter((r) => !existingSlugs.has(r.name)).length;
+  const importableCount = filtered.filter(
+    (r) => !existingSlugs.has(r.name)
+  ).length;
   const allImportableSelected =
     importableCount > 0 &&
     filtered
@@ -165,7 +188,10 @@ export function GitHubImportModal({ open, onClose, onImported }: GitHubImportMod
       <div className="space-y-4">
         {/* Search */}
         <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
           <input
             type="text"
             value={search}
@@ -180,7 +206,9 @@ export function GitHubImportModal({ open, onClose, onImported }: GitHubImportMod
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <Loader2 size={24} className="animate-spin text-accent" />
-              <p className="text-sm text-muted">Fetching repos from LXGIC-Studios...</p>
+              <p className="text-sm text-muted">
+                Fetching repos from LXGIC-Studios...
+              </p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -199,7 +227,6 @@ export function GitHubImportModal({ open, onClose, onImported }: GitHubImportMod
             </div>
           ) : (
             <>
-              {/* Select all header */}
               {importableCount > 0 && (
                 <div className="sticky top-0 bg-surface border-b border-card-border px-4 py-2 flex items-center gap-3 z-10">
                   <input

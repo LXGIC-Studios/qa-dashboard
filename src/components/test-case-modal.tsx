@@ -7,7 +7,14 @@ import type { TestCase, Category, TestStatus } from "@/lib/types";
 interface TestCaseModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (tc: TestCase) => void;
+  onSave: (tc: {
+    name: string;
+    category: Category;
+    description?: string;
+    expected_result?: string;
+    status: TestStatus;
+    project_id: string;
+  }) => void;
   testCase?: TestCase | null;
   projectId: string;
 }
@@ -30,7 +37,7 @@ export function TestCaseModal({
       setName(testCase.name);
       setCategory(testCase.category);
       setDescription(testCase.description || "");
-      setExpectedResult(testCase.expectedResult || "");
+      setExpectedResult(testCase.expected_result || "");
       setStatus(testCase.status);
     } else {
       setName("");
@@ -44,14 +51,12 @@ export function TestCaseModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave({
-      id: testCase?.id || `tc-${Date.now()}`,
-      projectId,
       name,
       category,
       description: description || undefined,
-      expectedResult: expectedResult || undefined,
+      expected_result: expectedResult || undefined,
       status,
-      lastRun: status !== "untested" ? new Date().toISOString().split("T")[0] : testCase?.lastRun,
+      project_id: projectId,
     });
     onClose();
   };
@@ -67,7 +72,9 @@ export function TestCaseModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">Name</label>
+          <label className="block text-xs font-medium text-muted mb-1.5">
+            Name
+          </label>
           <input
             type="text"
             value={name}
@@ -80,7 +87,9 @@ export function TestCaseModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Category</label>
+            <label className="block text-xs font-medium text-muted mb-1.5">
+              Category
+            </label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as Category)}
@@ -96,7 +105,9 @@ export function TestCaseModal({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted mb-1.5">Status</label>
+            <label className="block text-xs font-medium text-muted mb-1.5">
+              Status
+            </label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as TestStatus)}
@@ -111,7 +122,9 @@ export function TestCaseModal({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">Description</label>
+          <label className="block text-xs font-medium text-muted mb-1.5">
+            Description
+          </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}

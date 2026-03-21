@@ -1,51 +1,78 @@
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: "admin" | "tester";
+  avatar_url?: string;
+  created_at: string;
+}
+
 export interface Project {
   id: string;
   name: string;
   slug: string;
   url?: string;
+  github_url?: string;
   platform: "web" | "ios" | "both";
   status: "active" | "in-dev" | "maintenance";
-  lastTested?: string;
+  description?: string;
+  language?: string;
+  last_tested?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Bug {
   id: string;
-  projectId: string;
+  project_id: string;
   title: string;
   description: string;
   severity: "critical" | "high" | "medium" | "low";
   status: "open" | "in-progress" | "resolved" | "wont-fix";
-  stepsToReproduce?: string;
-  assignedTo?: string;
-  createdAt: string;
-  updatedAt: string;
+  steps_to_reproduce?: string;
+  assigned_to?: string;
+  reported_by?: string;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  assigned_profile?: Profile;
+  reported_profile?: Profile;
 }
 
 export interface TestCase {
   id: string;
-  projectId: string;
+  project_id: string;
   name: string;
   category: "auth" | "payments" | "ui" | "api" | "performance" | "security" | "other";
   description?: string;
-  expectedResult?: string;
+  expected_result?: string;
   status: "pass" | "fail" | "skip" | "untested";
-  lastRun?: string;
+  last_run?: string;
+  run_by?: string;
+  created_at?: string;
+  // Joined fields
+  run_by_profile?: Profile;
 }
 
 export interface ChecklistItem {
   id: string;
-  projectId: string;
+  project_id: string;
   label: string;
   checked: boolean;
   category: string;
+  checked_by?: string;
+  created_at?: string;
 }
 
-export interface HistoryEntry {
+export interface ActivityEntry {
   id: string;
-  projectId: string;
-  type: "test-run" | "bug-found" | "bug-resolved" | "release" | "checklist-update";
-  description: string;
-  timestamp: string;
+  project_id: string;
+  user_id?: string;
+  action: string;
+  details?: string;
+  created_at: string;
+  // Joined fields
+  user_profile?: Profile;
 }
 
 export type Severity = Bug["severity"];

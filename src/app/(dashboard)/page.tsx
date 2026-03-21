@@ -8,65 +8,86 @@ import {
   CheckCircle2,
   Rocket,
   ExternalLink,
-  Plus,
   Github,
   FolderPlus,
 } from "lucide-react";
 import {
   getProjects,
-  getBugs,
-  getTestCases,
-  getProjectHealth,
-  getBugCounts,
-  getTestPassRate,
+  getBugsByProject,
+  getTestCasesByProject,
   getChecklist,
+  computeProjectHealth,
+  computeBugCounts,
+  computeTestPassRate,
 } from "@/lib/store";
-import type { Project } from "@/lib/types";
-import { PlatformBadge, StatusBadge, SeverityDot, HealthDot } from "@/components/badges";
+import type { Project, Bug as BugType, TestCase } from "@/lib/types";
+import {
+  PlatformBadge,
+  StatusBadge,
+  SeverityDot,
+  HealthDot,
+} from "@/components/badges";
 import { GitHubImportModal } from "@/components/github-import-modal";
 import { AddProjectModal } from "@/components/add-project-modal";
 
+interface ProjectCardData {
+  project: Project;
+  health: "green" | "yellow" | "red";
+  bugCounts: ReturnType<typeof computeBugCounts>;
+  passRate: number;
+}
+
 export default function DashboardPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectCards, setProjectCards] = useState<ProjectCardData[]>([]);
   const [totalOpenBugs, setTotalOpenBugs] = useState(0);
   const [overallPassRate, setOverallPassRate] = useState(0);
   const [readyForRelease, setReadyForRelease] = useState(0);
   const [githubModalOpen, setGithubModalOpen] = useState(false);
   const [addProjectModalOpen, setAddProjectModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(() => {
-    const projs = getProjects();
-    setProjects(projs);
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const projs = await getProjects();
 
-    const bugs = getBugs();
-    const openBugs = bugs.filter(
-      (b) => b.status === "open" || b.status === "in-progress"
-    ).length;
-    setTotalOpenBugs(openBugs);
-
-    const allTests = getTestCases();
-    const runTests = allTests.filter((t) => t.status !== "untested");
-    const passRate =
-      runTests.length > 0
-        ? Math.round(
-            (runTests.filter((t) => t.status === "pass").length /
-              runTests.length) *
-              100
-          )
-        : 100;
-    setOverallPassRate(passRate);
-
+    let totalOpen = 0;
+    let allRun = 0;
+    let allPassed = 0;
     let rfrCount = 0;
+    const cards: ProjectCardData[] = [];
+
     for (const p of projs) {
-      const health = getProjectHealth(p.id);
-      const checklist = getChecklist(p.id);
+      const [bugs, tests, checklist] = await Promise.all([
+        getBugsByProject(p.id),
+        getTestCasesByProject(p.id),
+        getChecklist(p.id),
+      ]);
+
+      const health = computeProjectHealth(bugs);
+      const bugCounts = computeBugCounts(bugs);
+      const passRate = computeTestPassRate(tests);
+
+      totalOpen += bugCounts.total;
+      const run = tests.filter((t: TestCase) => t.status !== "untested");
+      allRun += run.length;
+      allPassed += run.filter((t: TestCase) => t.status === "pass").length;
+
       const checkRate =
         checklist.length > 0
           ? checklist.filter((c) => c.checked).length / checklist.length
           : 0;
       if (health === "green" && checkRate > 0.8) rfrCount++;
+
+      cards.push({ project: p, health, bugCounts, passRate });
     }
+
+    setProjectCards(cards);
+    setTotalOpenBugs(totalOpen);
+    setOverallPassRate(
+      allRun > 0 ? Math.round((allPassed / allRun) * 100) : 100
+    );
     setReadyForRelease(rfrCount);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -76,7 +97,7 @@ export default function DashboardPage() {
   const statCards = [
     {
       label: "Total Projects",
-      value: projects.length,
+      value: projectCards.length,
       icon: Boxes,
       color: "text-accent",
     },
@@ -100,6 +121,17 @@ export default function DashboardPage() {
     },
   ];
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -118,10 +150,14 @@ export default function DashboardPage() {
             className="bg-card border border-card-border rounded-xl p-5"
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-muted font-medium">{stat.label}</span>
+              <span className="text-xs text-muted font-medium">
+                {stat.label}
+              </span>
               <stat.icon size={16} className={stat.color} />
             </div>
-            <p className={`text-2xl font-bold font-[family-name:var(--font-heading)] ${stat.color}`}>
+            <p
+              className={`text-2xl font-bold font-[family-name:var(--font-heading)] ${stat.color}`}
+            >
               {stat.value}
             </p>
           </div>
@@ -151,12 +187,16 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {projects.length === 0 ? (
+        {projectCards.length === 0 ? (
           <div className="text-center py-16 bg-card border border-card-border rounded-xl">
-            <Boxes size={32} className="mx-auto text-muted-foreground mb-3" />
+            <Boxes
+              size={32}
+              className="mx-auto text-muted-foreground mb-3"
+            />
             <p className="text-sm text-muted mb-1">No projects yet</p>
             <p className="text-xs text-muted-foreground mb-4">
-              Import repos from GitHub or add a project manually to get started.
+              Import repos from GitHub or add a project manually to get
+              started.
             </p>
             <div className="flex items-center justify-center gap-2">
               <button
@@ -170,15 +210,15 @@ export default function DashboardPage() {
                 onClick={() => setAddProjectModalOpen(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors"
               >
-                <Plus size={14} />
+                <FolderPlus size={14} />
                 Add Manually
               </button>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+            {projectCards.map((card) => (
+              <ProjectCard key={card.project.id} data={card} />
             ))}
           </div>
         )}
@@ -198,10 +238,8 @@ export default function DashboardPage() {
   );
 }
 
-function ProjectCard({ project }: { project: Project }) {
-  const health = getProjectHealth(project.id);
-  const bugCounts = getBugCounts(project.id);
-  const passRate = getTestPassRate(project.id);
+function ProjectCard({ data }: { data: ProjectCardData }) {
+  const { project, health, bugCounts, passRate } = data;
 
   return (
     <Link
@@ -265,8 +303,8 @@ function ProjectCard({ project }: { project: Project }) {
 
       <div className="flex items-center justify-between text-xs text-muted pt-3 border-t border-card-border">
         <span>Tests: {passRate}% passing</span>
-        {project.lastTested && (
-          <span>Tested {formatDate(project.lastTested)}</span>
+        {project.last_tested && (
+          <span>Tested {formatDate(project.last_tested)}</span>
         )}
       </div>
     </Link>

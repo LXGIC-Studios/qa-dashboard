@@ -19,7 +19,7 @@ import {
   getBugsByProject,
   getTestCasesByProject,
   getChecklist,
-  getHistoryByProject,
+  getActivityByProject,
   addBug,
   updateBug,
   deleteBug,
@@ -27,10 +27,19 @@ import {
   updateTestCase,
   deleteTestCase,
   toggleChecklistItem,
-  getProjectHealth,
-  addHistoryEntry,
+  computeProjectHealth,
+  addActivityEntry,
+  getProfiles,
+  getCurrentUser,
 } from "@/lib/store";
-import type { Project, Bug, TestCase, ChecklistItem, HistoryEntry } from "@/lib/types";
+import type {
+  Project,
+  Bug,
+  TestCase,
+  ChecklistItem,
+  ActivityEntry,
+  Profile,
+} from "@/lib/types";
 import {
   PlatformBadge,
   StatusBadge,
@@ -54,26 +63,51 @@ export default function ProjectDetailPage() {
   const [bugs, setBugs] = useState<Bug[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [bugModalOpen, setBugModalOpen] = useState(false);
   const [testModalOpen, setTestModalOpen] = useState(false);
   const [editingBug, setEditingBug] = useState<Bug | null>(null);
   const [editingTest, setEditingTest] = useState<TestCase | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(() => {
-    const p = getProject(slug);
+  const refresh = useCallback(async () => {
+    const p = await getProject(slug);
     if (p) {
       setProject(p);
-      setBugs(getBugsByProject(p.id));
-      setTestCases(getTestCasesByProject(p.id));
-      setChecklist(getChecklist(p.id));
-      setHistory(getHistoryByProject(p.id));
+      const [b, tc, cl, act, profs, user] = await Promise.all([
+        getBugsByProject(p.id),
+        getTestCasesByProject(p.id),
+        getChecklist(p.id),
+        getActivityByProject(p.id),
+        getProfiles(),
+        getCurrentUser(),
+      ]);
+      setBugs(b);
+      setTestCases(tc);
+      setChecklist(cl);
+      setActivity(act);
+      setProfiles(profs);
+      setCurrentUser(user);
     }
+    setLoading(false);
   }, [slug]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted">Loading project...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!project) {
     return (
@@ -83,59 +117,98 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const health = getProjectHealth(project.id);
+  const health = computeProjectHealth(bugs);
 
-  const tabs: { id: Tab; label: string; icon: React.ElementType; count?: number }[] = [
-    { id: "tests", label: "Test Cases", icon: FlaskConical, count: testCases.length },
+  const tabs: {
+    id: Tab;
+    label: string;
+    icon: React.ElementType;
+    count?: number;
+  }[] = [
+    {
+      id: "tests",
+      label: "Test Cases",
+      icon: FlaskConical,
+      count: testCases.length,
+    },
     {
       id: "bugs",
       label: "Bugs",
       icon: BugIcon,
-      count: bugs.filter((b) => b.status === "open" || b.status === "in-progress").length,
+      count: bugs.filter(
+        (b) => b.status === "open" || b.status === "in-progress"
+      ).length,
     },
     { id: "checklist", label: "Checklist", icon: ClipboardCheck },
     { id: "history", label: "History", icon: Clock },
   ];
 
-  const handleSaveBug = (bug: Bug) => {
+  const handleSaveBug = async (bugData: {
+    title: string;
+    description: string;
+    severity: Bug["severity"];
+    status: Bug["status"];
+    steps_to_reproduce?: string;
+    assigned_to?: string;
+    project_id: string;
+  }) => {
     if (editingBug) {
-      updateBug(bug);
+      await updateBug(editingBug.id, bugData);
     } else {
-      addBug(bug);
+      await addBug({
+        ...bugData,
+        reported_by: currentUser?.id,
+      });
     }
     setEditingBug(null);
     refresh();
   };
 
-  const handleDeleteBug = (id: string) => {
-    deleteBug(id);
+  const handleDeleteBug = async (id: string) => {
+    await deleteBug(id);
     refresh();
   };
 
-  const handleSaveTest = (tc: TestCase) => {
+  const handleSaveTest = async (tcData: {
+    name: string;
+    category: TestCase["category"];
+    description?: string;
+    expected_result?: string;
+    status: TestCase["status"];
+    project_id: string;
+  }) => {
     if (editingTest) {
-      updateTestCase(tc);
+      await updateTestCase(editingTest.id, {
+        ...tcData,
+        last_run:
+          tcData.status !== "untested" ? new Date().toISOString() : undefined,
+        run_by: tcData.status !== "untested" ? currentUser?.id : undefined,
+      });
     } else {
-      addTestCase(tc);
-      addHistoryEntry({
-        id: `hist-${Date.now()}`,
-        projectId: project.id,
-        type: "test-run",
-        description: `Added test case: ${tc.name}`,
-        timestamp: new Date().toISOString(),
+      await addTestCase({
+        ...tcData,
+        last_run:
+          tcData.status !== "untested" ? new Date().toISOString() : undefined,
+        run_by: tcData.status !== "untested" ? currentUser?.id : undefined,
+      });
+      await addActivityEntry({
+        project_id: project.id,
+        user_id: currentUser?.id,
+        action: "test-run",
+        details: `Added test case: ${tcData.name}`,
       });
     }
     setEditingTest(null);
     refresh();
   };
 
-  const handleDeleteTest = (id: string) => {
-    deleteTestCase(id);
+  const handleDeleteTest = async (id: string) => {
+    await deleteTestCase(id);
     refresh();
   };
 
-  const handleToggleChecklist = (id: string) => {
-    toggleChecklistItem(id);
+  const handleToggleChecklist = async (id: string, checked: boolean) => {
+    await toggleChecklistItem(id, !checked, currentUser?.id);
     refresh();
   };
 
@@ -193,9 +266,11 @@ export default function ProjectDetailPage() {
             <tab.icon size={15} />
             {tab.label}
             {tab.count !== undefined && tab.count > 0 && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                activeTab === tab.id ? "bg-accent/10" : "bg-surface"
-              }`}>
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                  activeTab === tab.id ? "bg-accent/10" : "bg-surface"
+                }`}
+              >
                 {tab.count}
               </span>
             )}
@@ -207,35 +282,55 @@ export default function ProjectDetailPage() {
       {activeTab === "tests" && (
         <TestCasesTab
           testCases={testCases}
-          onAdd={() => { setEditingTest(null); setTestModalOpen(true); }}
-          onEdit={(tc) => { setEditingTest(tc); setTestModalOpen(true); }}
+          onAdd={() => {
+            setEditingTest(null);
+            setTestModalOpen(true);
+          }}
+          onEdit={(tc) => {
+            setEditingTest(tc);
+            setTestModalOpen(true);
+          }}
           onDelete={handleDeleteTest}
         />
       )}
       {activeTab === "bugs" && (
         <BugsTab
           bugs={bugs}
-          onAdd={() => { setEditingBug(null); setBugModalOpen(true); }}
-          onEdit={(bug) => { setEditingBug(bug); setBugModalOpen(true); }}
+          profiles={profiles}
+          onAdd={() => {
+            setEditingBug(null);
+            setBugModalOpen(true);
+          }}
+          onEdit={(bug) => {
+            setEditingBug(bug);
+            setBugModalOpen(true);
+          }}
           onDelete={handleDeleteBug}
         />
       )}
       {activeTab === "checklist" && (
         <ChecklistTab checklist={checklist} onToggle={handleToggleChecklist} />
       )}
-      {activeTab === "history" && <HistoryTab history={history} />}
+      {activeTab === "history" && <HistoryTab activity={activity} />}
 
       {/* Modals */}
       <BugModal
         open={bugModalOpen}
-        onClose={() => { setBugModalOpen(false); setEditingBug(null); }}
+        onClose={() => {
+          setBugModalOpen(false);
+          setEditingBug(null);
+        }}
         onSave={handleSaveBug}
         bug={editingBug}
         projectId={project.id}
+        profiles={profiles}
       />
       <TestCaseModal
         open={testModalOpen}
-        onClose={() => { setTestModalOpen(false); setEditingTest(null); }}
+        onClose={() => {
+          setTestModalOpen(false);
+          setEditingTest(null);
+        }}
         onSave={handleSaveTest}
         testCase={editingTest}
         projectId={project.id}
@@ -270,7 +365,11 @@ function TestCasesTab({
       </div>
 
       {testCases.length === 0 ? (
-        <EmptyState message="No test cases yet" onAction={onAdd} actionLabel="Add first test case" />
+        <EmptyState
+          message="No test cases yet"
+          onAction={onAdd}
+          actionLabel="Add first test case"
+        />
       ) : (
         <div className="space-y-2">
           {testCases.map((tc) => (
@@ -287,16 +386,21 @@ function TestCasesTab({
                 {tc.description && (
                   <p className="text-xs text-muted mt-1">{tc.description}</p>
                 )}
-                {tc.expectedResult && (
+                {tc.expected_result && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Expected: {tc.expectedResult}
+                    Expected: {tc.expected_result}
                   </p>
                 )}
-                {tc.lastRun && (
-                  <p className="text-[10px] text-muted-foreground mt-2">
-                    Last run: {tc.lastRun}
-                  </p>
-                )}
+                <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+                  {tc.run_by_profile && (
+                    <span>Run by: {tc.run_by_profile.full_name}</span>
+                  )}
+                  {tc.last_run && (
+                    <span>
+                      Last run: {new Date(tc.last_run).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button
@@ -323,11 +427,13 @@ function TestCasesTab({
 /* ===== Bugs Tab ===== */
 function BugsTab({
   bugs,
+  profiles,
   onAdd,
   onEdit,
   onDelete,
 }: {
   bugs: Bug[];
+  profiles: Profile[];
   onAdd: () => void;
   onEdit: (bug: Bug) => void;
   onDelete: (id: string) => void;
@@ -346,47 +452,63 @@ function BugsTab({
       </div>
 
       {bugs.length === 0 ? (
-        <EmptyState message="No bugs reported" onAction={onAdd} actionLabel="Report first bug" />
+        <EmptyState
+          message="No bugs reported"
+          onAction={onAdd}
+          actionLabel="Report first bug"
+        />
       ) : (
         <div className="space-y-2">
-          {bugs.map((bug) => (
-            <div
-              key={bug.id}
-              className="bg-card border border-card-border rounded-lg p-4 flex items-start justify-between gap-4"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-sm font-medium">{bug.title}</span>
-                  <SeverityBadge severity={bug.severity} />
-                  <BugStatusBadge status={bug.status} />
-                </div>
-                <p className="text-xs text-muted mt-1">{bug.description}</p>
-                {bug.stepsToReproduce && (
-                  <div className="mt-2 p-2 bg-surface rounded text-xs text-muted-foreground whitespace-pre-line">
-                    {bug.stepsToReproduce}
+          {bugs.map((bug) => {
+            const assignedProfile = bug.assigned_profile;
+            const reportedProfile = bug.reported_profile;
+            return (
+              <div
+                key={bug.id}
+                className="bg-card border border-card-border rounded-lg p-4 flex items-start justify-between gap-4"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-sm font-medium">{bug.title}</span>
+                    <SeverityBadge severity={bug.severity} />
+                    <BugStatusBadge status={bug.status} />
                   </div>
-                )}
-                <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
-                  {bug.assignedTo && <span>Assigned to: {bug.assignedTo}</span>}
-                  <span>Created: {new Date(bug.createdAt).toLocaleDateString()}</span>
+                  <p className="text-xs text-muted mt-1">{bug.description}</p>
+                  {bug.steps_to_reproduce && (
+                    <div className="mt-2 p-2 bg-surface rounded text-xs text-muted-foreground whitespace-pre-line">
+                      {bug.steps_to_reproduce}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+                    {assignedProfile && (
+                      <span>Assigned to: {assignedProfile.full_name}</span>
+                    )}
+                    {reportedProfile && (
+                      <span>Reported by: {reportedProfile.full_name}</span>
+                    )}
+                    <span>
+                      Created:{" "}
+                      {new Date(bug.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => onEdit(bug)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={() => onDelete(bug.id)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-accent-pink hover:bg-surface transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => onEdit(bug)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
-                >
-                  <Pencil size={14} />
-                </button>
-                <button
-                  onClick={() => onDelete(bug.id)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-accent-pink hover:bg-surface transition-colors"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -399,7 +521,7 @@ function ChecklistTab({
   onToggle,
 }: {
   checklist: ChecklistItem[];
-  onToggle: (id: string) => void;
+  onToggle: (id: string, checked: boolean) => void;
 }) {
   const checked = checklist.filter((c) => c.checked).length;
   const total = checklist.length;
@@ -413,7 +535,6 @@ function ChecklistTab({
         </p>
       </div>
 
-      {/* Progress bar */}
       <div className="w-full bg-surface rounded-full h-2 mb-6">
         <div
           className="bg-accent h-2 rounded-full transition-all duration-300"
@@ -430,7 +551,7 @@ function ChecklistTab({
             <input
               type="checkbox"
               checked={item.checked}
-              onChange={() => onToggle(item.id)}
+              onChange={() => onToggle(item.id, item.checked)}
               className="w-4 h-4 rounded border-card-border bg-surface text-accent focus:ring-accent/20 accent-[#00FF66]"
             />
             <span
@@ -451,7 +572,7 @@ function ChecklistTab({
 }
 
 /* ===== History Tab ===== */
-function HistoryTab({ history }: { history: HistoryEntry[] }) {
+function HistoryTab({ activity }: { activity: ActivityEntry[] }) {
   const typeStyles: Record<string, { color: string; label: string }> = {
     "test-run": { color: "bg-accent-blue", label: "Test Run" },
     "bug-found": { color: "bg-accent-pink", label: "Bug Found" },
@@ -462,22 +583,24 @@ function HistoryTab({ history }: { history: HistoryEntry[] }) {
 
   return (
     <div>
-      {history.length === 0 ? (
+      {activity.length === 0 ? (
         <div className="text-center py-12 text-muted text-sm">
           No activity recorded yet
         </div>
       ) : (
         <div className="space-y-0">
-          {history.map((entry, idx) => {
-            const style = typeStyles[entry.type] || {
+          {activity.map((entry, idx) => {
+            const style = typeStyles[entry.action] || {
               color: "bg-muted",
-              label: entry.type,
+              label: entry.action,
             };
             return (
               <div key={entry.id} className="flex gap-4">
                 <div className="flex flex-col items-center">
-                  <div className={`w-2.5 h-2.5 rounded-full ${style.color} mt-1.5`} />
-                  {idx < history.length - 1 && (
+                  <div
+                    className={`w-2.5 h-2.5 rounded-full ${style.color} mt-1.5`}
+                  />
+                  {idx < activity.length - 1 && (
                     <div className="w-px flex-1 bg-card-border" />
                   )}
                 </div>
@@ -486,11 +609,16 @@ function HistoryTab({ history }: { history: HistoryEntry[] }) {
                     <span className="text-[10px] font-medium text-muted uppercase">
                       {style.label}
                     </span>
+                    {entry.user_profile && (
+                      <span className="text-[10px] text-accent-blue">
+                        {entry.user_profile.full_name}
+                      </span>
+                    )}
                     <span className="text-[10px] text-muted-foreground">
-                      {new Date(entry.timestamp).toLocaleString()}
+                      {new Date(entry.created_at).toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-sm">{entry.description}</p>
+                  <p className="text-sm">{entry.details}</p>
                 </div>
               </div>
             );

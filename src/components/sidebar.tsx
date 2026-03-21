@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   FileBarChart,
   Bug,
   Menu,
   X,
+  LogOut,
+  User,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import type { Profile } from "@/lib/types";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -18,7 +22,33 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function loadProfile() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+        if (data) setProfile(data as Profile);
+      }
+    }
+    loadProfile();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <>
@@ -84,10 +114,29 @@ export function Sidebar() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-card-border">
-          <p className="text-[10px] text-muted-foreground">
-            Internal Tool v1.0
-          </p>
+        <div className="p-4 border-t border-card-border space-y-3">
+          {profile && (
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-surface flex items-center justify-center">
+                <User size={14} className="text-muted" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate">
+                  {profile.full_name}
+                </p>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {profile.email}
+                </p>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-muted hover:text-accent-pink hover:bg-surface transition-colors"
+          >
+            <LogOut size={14} />
+            Sign Out
+          </button>
         </div>
       </aside>
     </>

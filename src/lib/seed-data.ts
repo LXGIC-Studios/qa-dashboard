@@ -1,5 +1,3 @@
-import { ChecklistItem } from "./types";
-
 const defaultChecklistLabels = [
   { label: "Responsive Design", category: "UI" },
   { label: "Cross-Browser Testing", category: "UI" },
@@ -13,10 +11,9 @@ const defaultChecklistLabels = [
   { label: "Analytics Integration", category: "Analytics" },
 ];
 
-export function generateChecklistForProject(projectId: string): ChecklistItem[] {
-  return defaultChecklistLabels.map((item, idx) => ({
-    id: `cl-${projectId}-${idx}`,
-    projectId,
+export function generateChecklistForProject(projectId: string) {
+  return defaultChecklistLabels.map((item) => ({
+    project_id: projectId,
     label: item.label,
     checked: false,
     category: item.category,

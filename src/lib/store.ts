@@ -1,175 +1,269 @@
-import { Project, Bug, TestCase, ChecklistItem, HistoryEntry } from "./types";
+import { createClient } from "@/lib/supabase/client";
+import type {
+  Project,
+  Bug,
+  TestCase,
+  ChecklistItem,
+  ActivityEntry,
+  Profile,
+} from "./types";
 import { generateChecklistForProject } from "./seed-data";
 
-const KEYS = {
-  projects: "qa-projects",
-  bugs: "qa-bugs",
-  testCases: "qa-test-cases",
-  checklist: "qa-checklist",
-  history: "qa-history",
-} as const;
+function supabase() {
+  return createClient();
+}
 
-function getItem<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
+// ============ Profiles ============
+
+export async function getProfiles(): Promise<Profile[]> {
+  const { data } = await supabase()
+    .from("profiles")
+    .select("*")
+    .order("full_name");
+  return (data as Profile[]) || [];
+}
+
+export async function getCurrentUser(): Promise<Profile | null> {
+  const {
+    data: { user },
+  } = await supabase().auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase()
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+  return data as Profile | null;
+}
+
+// ============ Projects ============
+
+export async function getProjects(): Promise<Project[]> {
+  const { data } = await supabase()
+    .from("projects")
+    .select("*")
+    .order("name");
+  return (data as Project[]) || [];
+}
+
+export async function getProject(slug: string): Promise<Project | null> {
+  const { data } = await supabase()
+    .from("projects")
+    .select("*")
+    .eq("slug", slug)
+    .single();
+  return data as Project | null;
+}
+
+export async function getProjectById(id: string): Promise<Project | null> {
+  const { data } = await supabase()
+    .from("projects")
+    .select("*")
+    .eq("id", id)
+    .single();
+  return data as Project | null;
+}
+
+export async function addProject(
+  project: Omit<Project, "id" | "created_at" | "updated_at">
+): Promise<Project | null> {
+  const { data } = await supabase()
+    .from("projects")
+    .insert(project)
+    .select()
+    .single();
+  if (data) {
+    const items = generateChecklistForProject(data.id);
+    await supabase().from("checklist_items").insert(items);
   }
+  return data as Project | null;
 }
 
-function setItem<T>(key: string, value: T): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-export function initializeStore(): void {
-  // No-op — data starts empty, users add projects via import or manual form
-}
-
-// Projects
-export function getProjects(): Project[] {
-  return getItem<Project[]>(KEYS.projects, []);
-}
-
-export function getProject(slug: string): Project | undefined {
-  return getProjects().find((p) => p.slug === slug);
-}
-
-export function getProjectById(id: string): Project | undefined {
-  return getProjects().find((p) => p.id === id);
-}
-
-export function addProject(project: Project): void {
-  const projects = getProjects();
-  projects.push(project);
-  setItem(KEYS.projects, projects);
-
-  // Generate default checklist for the new project
-  const allChecklists = getItem<ChecklistItem[]>(KEYS.checklist, []);
-  const newChecklist = generateChecklistForProject(project.id);
-  setItem(KEYS.checklist, [...allChecklists, ...newChecklist]);
-}
-
-export function addProjects(newProjects: Project[]): void {
-  const projects = getProjects();
-  const allChecklists = getItem<ChecklistItem[]>(KEYS.checklist, []);
-  const newChecklists: ChecklistItem[] = [];
-
-  for (const project of newProjects) {
-    projects.push(project);
-    newChecklists.push(...generateChecklistForProject(project.id));
+export async function addProjects(
+  projects: Omit<Project, "id" | "created_at" | "updated_at">[]
+): Promise<Project[]> {
+  const { data } = await supabase()
+    .from("projects")
+    .insert(projects)
+    .select();
+  if (data && data.length > 0) {
+    const allChecklist = data.flatMap((p: Project) =>
+      generateChecklistForProject(p.id)
+    );
+    await supabase().from("checklist_items").insert(allChecklist);
   }
-
-  setItem(KEYS.projects, projects);
-  setItem(KEYS.checklist, [...allChecklists, ...newChecklists]);
+  return (data as Project[]) || [];
 }
 
-// Bugs
-export function getBugs(): Bug[] {
-  return getItem<Bug[]>(KEYS.bugs, []);
+// ============ Bugs ============
+
+export async function getBugs(): Promise<Bug[]> {
+  const { data } = await supabase()
+    .from("bugs")
+    .select("*, assigned_profile:profiles!bugs_assigned_to_fkey(*), reported_profile:profiles!bugs_reported_by_fkey(*)")
+    .order("created_at", { ascending: false });
+  return (data as Bug[]) || [];
 }
 
-export function getBugsByProject(projectId: string): Bug[] {
-  return getBugs().filter((b) => b.projectId === projectId);
+export async function getBugsByProject(projectId: string): Promise<Bug[]> {
+  const { data } = await supabase()
+    .from("bugs")
+    .select("*, assigned_profile:profiles!bugs_assigned_to_fkey(*), reported_profile:profiles!bugs_reported_by_fkey(*)")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  return (data as Bug[]) || [];
 }
 
-export function addBug(bug: Bug): void {
-  const bugs = getBugs();
-  bugs.push(bug);
-  setItem(KEYS.bugs, bugs);
-  addHistoryEntry({
-    id: `hist-${Date.now()}`,
-    projectId: bug.projectId,
-    type: "bug-found",
-    description: `Found: ${bug.title}`,
-    timestamp: new Date().toISOString(),
-  });
-}
-
-export function updateBug(updated: Bug): void {
-  const bugs = getBugs().map((b) => (b.id === updated.id ? updated : b));
-  setItem(KEYS.bugs, bugs);
-  if (updated.status === "resolved") {
-    addHistoryEntry({
-      id: `hist-${Date.now()}`,
-      projectId: updated.projectId,
-      type: "bug-resolved",
-      description: `Resolved: ${updated.title}`,
-      timestamp: new Date().toISOString(),
+export async function addBug(
+  bug: Omit<Bug, "id" | "created_at" | "updated_at" | "assigned_profile" | "reported_profile">
+): Promise<Bug | null> {
+  const { data } = await supabase()
+    .from("bugs")
+    .insert(bug)
+    .select()
+    .single();
+  if (data) {
+    await addActivityEntry({
+      project_id: bug.project_id,
+      user_id: bug.reported_by || undefined,
+      action: "bug-found",
+      details: `Found: ${bug.title}`,
     });
   }
+  return data as Bug | null;
 }
 
-export function deleteBug(id: string): void {
-  const bugs = getBugs().filter((b) => b.id !== id);
-  setItem(KEYS.bugs, bugs);
+export async function updateBug(
+  id: string,
+  updates: Partial<Omit<Bug, "id" | "assigned_profile" | "reported_profile">>
+): Promise<Bug | null> {
+  const { data } = await supabase()
+    .from("bugs")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (data && updates.status === "resolved") {
+    await addActivityEntry({
+      project_id: data.project_id,
+      action: "bug-resolved",
+      details: `Resolved: ${data.title}`,
+    });
+  }
+  return data as Bug | null;
 }
 
-// Test Cases
-export function getTestCases(): TestCase[] {
-  return getItem<TestCase[]>(KEYS.testCases, []);
+export async function deleteBug(id: string): Promise<void> {
+  await supabase().from("bugs").delete().eq("id", id);
 }
 
-export function getTestCasesByProject(projectId: string): TestCase[] {
-  return getTestCases().filter((tc) => tc.projectId === projectId);
+// ============ Test Cases ============
+
+export async function getTestCases(): Promise<TestCase[]> {
+  const { data } = await supabase()
+    .from("test_cases")
+    .select("*, run_by_profile:profiles!test_cases_run_by_fkey(*)")
+    .order("created_at", { ascending: false });
+  return (data as TestCase[]) || [];
 }
 
-export function addTestCase(tc: TestCase): void {
-  const cases = getTestCases();
-  cases.push(tc);
-  setItem(KEYS.testCases, cases);
+export async function getTestCasesByProject(
+  projectId: string
+): Promise<TestCase[]> {
+  const { data } = await supabase()
+    .from("test_cases")
+    .select("*, run_by_profile:profiles!test_cases_run_by_fkey(*)")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  return (data as TestCase[]) || [];
 }
 
-export function updateTestCase(updated: TestCase): void {
-  const cases = getTestCases().map((tc) =>
-    tc.id === updated.id ? updated : tc
+export async function addTestCase(
+  tc: Omit<TestCase, "id" | "created_at" | "run_by_profile">
+): Promise<TestCase | null> {
+  const { data } = await supabase()
+    .from("test_cases")
+    .insert(tc)
+    .select()
+    .single();
+  return data as TestCase | null;
+}
+
+export async function updateTestCase(
+  id: string,
+  updates: Partial<Omit<TestCase, "id" | "run_by_profile">>
+): Promise<TestCase | null> {
+  const { data } = await supabase()
+    .from("test_cases")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+  return data as TestCase | null;
+}
+
+export async function deleteTestCase(id: string): Promise<void> {
+  await supabase().from("test_cases").delete().eq("id", id);
+}
+
+// ============ Checklist ============
+
+export async function getChecklist(projectId: string): Promise<ChecklistItem[]> {
+  const { data } = await supabase()
+    .from("checklist_items")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at");
+  return (data as ChecklistItem[]) || [];
+}
+
+export async function toggleChecklistItem(
+  id: string,
+  checked: boolean,
+  userId?: string
+): Promise<void> {
+  await supabase()
+    .from("checklist_items")
+    .update({ checked, checked_by: checked ? userId : null })
+    .eq("id", id);
+}
+
+// ============ Activity Log ============
+
+export async function getActivity(): Promise<ActivityEntry[]> {
+  const { data } = await supabase()
+    .from("activity_log")
+    .select("*, user_profile:profiles!activity_log_user_id_fkey(*)")
+    .order("created_at", { ascending: false });
+  return (data as ActivityEntry[]) || [];
+}
+
+export async function getActivityByProject(
+  projectId: string
+): Promise<ActivityEntry[]> {
+  const { data } = await supabase()
+    .from("activity_log")
+    .select("*, user_profile:profiles!activity_log_user_id_fkey(*)")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  return (data as ActivityEntry[]) || [];
+}
+
+export async function addActivityEntry(entry: {
+  project_id: string;
+  user_id?: string;
+  action: string;
+  details?: string;
+}): Promise<void> {
+  await supabase().from("activity_log").insert(entry);
+}
+
+// ============ Computed Helpers ============
+
+export function computeProjectHealth(bugs: Bug[]): "green" | "yellow" | "red" {
+  const openBugs = bugs.filter(
+    (b) => b.status === "open" || b.status === "in-progress"
   );
-  setItem(KEYS.testCases, cases);
-}
-
-export function deleteTestCase(id: string): void {
-  const cases = getTestCases().filter((tc) => tc.id !== id);
-  setItem(KEYS.testCases, cases);
-}
-
-// Checklist
-export function getChecklist(projectId: string): ChecklistItem[] {
-  return getItem<ChecklistItem[]>(KEYS.checklist, []).filter(
-    (c) => c.projectId === projectId
-  );
-}
-
-export function toggleChecklistItem(id: string): void {
-  const all = getItem<ChecklistItem[]>(KEYS.checklist, []);
-  const updated = all.map((c) =>
-    c.id === id ? { ...c, checked: !c.checked } : c
-  );
-  setItem(KEYS.checklist, updated);
-}
-
-// History
-export function getHistory(): HistoryEntry[] {
-  return getItem<HistoryEntry[]>(KEYS.history, []);
-}
-
-export function getHistoryByProject(projectId: string): HistoryEntry[] {
-  return getHistory()
-    .filter((h) => h.projectId === projectId)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-}
-
-export function addHistoryEntry(entry: HistoryEntry): void {
-  const history = getHistory();
-  history.push(entry);
-  setItem(KEYS.history, history);
-}
-
-// Computed helpers
-export function getProjectHealth(projectId: string): "green" | "yellow" | "red" {
-  const bugs = getBugsByProject(projectId);
-  const openBugs = bugs.filter((b) => b.status === "open" || b.status === "in-progress");
   const criticalOpen = openBugs.filter((b) => b.severity === "critical").length;
   const highOpen = openBugs.filter((b) => b.severity === "high").length;
 
@@ -179,21 +273,20 @@ export function getProjectHealth(projectId: string): "green" | "yellow" | "red" 
   return "green";
 }
 
-export function getBugCounts(projectId: string) {
-  const bugs = getBugsByProject(projectId).filter(
+export function computeBugCounts(bugs: Bug[]) {
+  const openBugs = bugs.filter(
     (b) => b.status === "open" || b.status === "in-progress"
   );
   return {
-    critical: bugs.filter((b) => b.severity === "critical").length,
-    high: bugs.filter((b) => b.severity === "high").length,
-    medium: bugs.filter((b) => b.severity === "medium").length,
-    low: bugs.filter((b) => b.severity === "low").length,
-    total: bugs.length,
+    critical: openBugs.filter((b) => b.severity === "critical").length,
+    high: openBugs.filter((b) => b.severity === "high").length,
+    medium: openBugs.filter((b) => b.severity === "medium").length,
+    low: openBugs.filter((b) => b.severity === "low").length,
+    total: openBugs.length,
   };
 }
 
-export function getTestPassRate(projectId: string): number {
-  const tests = getTestCasesByProject(projectId);
+export function computeTestPassRate(tests: TestCase[]): number {
   if (tests.length === 0) return 100;
   const run = tests.filter((t) => t.status !== "untested");
   if (run.length === 0) return 0;

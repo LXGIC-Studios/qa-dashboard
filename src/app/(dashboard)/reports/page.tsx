@@ -5,46 +5,92 @@ import {
   getProjects,
   getBugs,
   getTestCases,
-  getHistory,
-  getProjectHealth,
-  getTestPassRate,
+  getActivity,
   getTestCasesByProject,
+  computeProjectHealth,
+  computeTestPassRate,
 } from "@/lib/store";
-import type { Project, Bug, HistoryEntry } from "@/lib/types";
+import type { Project, Bug, ActivityEntry } from "@/lib/types";
 import { HealthDot, SeverityDot } from "@/components/badges";
 
 export default function ReportsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [bugs, setBugs] = useState<Bug[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [testStats, setTestStats] = useState<{ projectName: string; total: number; pass: number; rate: number }[]>([]);
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [testStats, setTestStats] = useState<
+    { projectName: string; total: number; pass: number; rate: number }[]
+  >([]);
+  const [healthGroups, setHealthGroups] = useState<
+    Record<"green" | "yellow" | "red", Project[]>
+  >({ green: [], yellow: [], red: [] });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const projs = getProjects();
-    setProjects(projs);
-    setBugs(getBugs());
-    setHistory(
-      getHistory().sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      )
-    );
+    async function load() {
+      const [projs, allBugs, allActivity] = await Promise.all([
+        getProjects(),
+        getBugs(),
+        getActivity(),
+      ]);
 
-    const stats = projs.map((p) => {
-      const tests = getTestCasesByProject(p.id);
-      const run = tests.filter((t) => t.status !== "untested");
-      const pass = run.filter((t) => t.status === "pass").length;
-      return {
-        projectName: p.name,
-        total: tests.length,
-        pass,
-        rate: getTestPassRate(p.id),
+      setProjects(projs);
+      setBugs(allBugs);
+      setActivity(allActivity);
+
+      const groups: Record<"green" | "yellow" | "red", Project[]> = {
+        green: [],
+        yellow: [],
+        red: [],
       };
-    }).filter((s) => s.total > 0);
-    setTestStats(stats);
+      const stats: {
+        projectName: string;
+        total: number;
+        pass: number;
+        rate: number;
+      }[] = [];
+
+      for (const p of projs) {
+        const [projBugs, tests] = await Promise.all([
+          (async () => allBugs.filter((b) => b.project_id === p.id))(),
+          getTestCasesByProject(p.id),
+        ]);
+
+        const h = computeProjectHealth(projBugs);
+        groups[h].push(p);
+
+        const run = tests.filter((t) => t.status !== "untested");
+        const pass = run.filter((t) => t.status === "pass").length;
+        if (tests.length > 0) {
+          stats.push({
+            projectName: p.name,
+            total: tests.length,
+            pass,
+            rate: computeTestPassRate(tests),
+          });
+        }
+      }
+
+      setHealthGroups(groups);
+      setTestStats(stats);
+      setLoading(false);
+    }
+    load();
   }, []);
 
-  // Bug severity distribution
-  const openBugs = bugs.filter((b) => b.status === "open" || b.status === "in-progress");
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted">Loading reports...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const openBugs = bugs.filter(
+    (b) => b.status === "open" || b.status === "in-progress"
+  );
   const severityCounts = {
     critical: openBugs.filter((b) => b.severity === "critical").length,
     high: openBugs.filter((b) => b.severity === "high").length,
@@ -53,15 +99,7 @@ export default function ReportsPage() {
   };
   const maxSeverity = Math.max(...Object.values(severityCounts), 1);
 
-  // Bug trends - last 30 days
   const bugTrend = generateBugTrend(bugs);
-
-  // Projects by health
-  const healthGroups = { green: [] as Project[], yellow: [] as Project[], red: [] as Project[] };
-  for (const p of projects) {
-    const h = getProjectHealth(p.id);
-    healthGroups[h].push(p);
-  }
 
   return (
     <div className="space-y-8">
@@ -106,10 +144,14 @@ export default function ReportsPage() {
                         ? "bg-yellow-400"
                         : "bg-accent-blue"
                     }`}
-                    style={{ width: `${(severityCounts[sev] / maxSeverity) * 100}%` }}
+                    style={{
+                      width: `${(severityCounts[sev] / maxSeverity) * 100}%`,
+                    }}
                   />
                 </div>
-                <span className="text-xs font-medium w-6 text-right">{severityCounts[sev]}</span>
+                <span className="text-xs font-medium w-6 text-right">
+                  {severityCounts[sev]}
+                </span>
               </div>
             ))}
           </div>
@@ -126,9 +168,15 @@ export default function ReportsPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <HealthDot health={health} />
                   <span className="text-xs font-medium capitalize">
-                    {health === "green" ? "Healthy" : health === "yellow" ? "Warning" : "Critical"}
+                    {health === "green"
+                      ? "Healthy"
+                      : health === "yellow"
+                      ? "Warning"
+                      : "Critical"}
                   </span>
-                  <span className="text-xs text-muted">({healthGroups[health].length})</span>
+                  <span className="text-xs text-muted">
+                    ({healthGroups[health].length})
+                  </span>
                 </div>
                 {healthGroups[health].length > 0 ? (
                   <div className="flex flex-wrap gap-1.5 ml-5">
@@ -142,7 +190,9 @@ export default function ReportsPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[10px] text-muted-foreground ml-5">No projects</p>
+                  <p className="text-[10px] text-muted-foreground ml-5">
+                    No projects
+                  </p>
                 )}
               </div>
             ))}
@@ -155,12 +205,17 @@ export default function ReportsPage() {
             Test Coverage per Project
           </h3>
           {testStats.length === 0 ? (
-            <p className="text-sm text-muted text-center py-8">No test data yet</p>
+            <p className="text-sm text-muted text-center py-8">
+              No test data yet
+            </p>
           ) : (
             <div className="space-y-3">
               {testStats.map((stat) => (
                 <div key={stat.projectName} className="flex items-center gap-3">
-                  <span className="text-xs text-muted w-32 truncate" title={stat.projectName}>
+                  <span
+                    className="text-xs text-muted w-32 truncate"
+                    title={stat.projectName}
+                  >
                     {stat.projectName}
                   </span>
                   <div className="flex-1 bg-surface rounded-full h-5 overflow-hidden">
@@ -190,26 +245,35 @@ export default function ReportsPage() {
         <h3 className="text-sm font-semibold font-[family-name:var(--font-heading)] mb-4">
           Recent Activity
         </h3>
-        {history.length === 0 ? (
-          <p className="text-sm text-muted text-center py-8">No activity yet</p>
+        {activity.length === 0 ? (
+          <p className="text-sm text-muted text-center py-8">
+            No activity yet
+          </p>
         ) : (
           <div className="space-y-3">
-            {history.slice(0, 10).map((entry) => {
-              const proj = projects.find((p) => p.id === entry.projectId);
+            {activity.slice(0, 10).map((entry) => {
+              const proj = projects.find((p) => p.id === entry.project_id);
               return (
                 <div
                   key={entry.id}
                   className="flex items-start gap-3 py-2 border-b border-card-border last:border-0"
                 >
-                  <ActivityDot type={entry.type} />
+                  <ActivityDot type={entry.action} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm">{entry.description}</p>
+                    <p className="text-sm">{entry.details}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       {proj && (
-                        <span className="text-[10px] text-muted">{proj.name}</span>
+                        <span className="text-[10px] text-muted">
+                          {proj.name}
+                        </span>
+                      )}
+                      {entry.user_profile && (
+                        <span className="text-[10px] text-accent-blue">
+                          {entry.user_profile.full_name}
+                        </span>
                       )}
                       <span className="text-[10px] text-muted-foreground">
-                        {new Date(entry.timestamp).toLocaleString()}
+                        {new Date(entry.created_at).toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -240,7 +304,6 @@ function ActivityDot({ type }: { type: string }) {
   );
 }
 
-/* Simple bar chart for bug trends */
 function generateBugTrend(bugs: Bug[]) {
   const now = new Date();
   const days: { label: string; opened: number; resolved: number }[] = [];
@@ -249,11 +312,14 @@ function generateBugTrend(bugs: Bug[]) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().split("T")[0];
-    const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const label = d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
 
-    const opened = bugs.filter((b) => b.createdAt.startsWith(dateStr)).length;
+    const opened = bugs.filter((b) => b.created_at.startsWith(dateStr)).length;
     const resolved = bugs.filter(
-      (b) => b.status === "resolved" && b.updatedAt.startsWith(dateStr)
+      (b) => b.status === "resolved" && b.updated_at.startsWith(dateStr)
     ).length;
 
     days.push({ label, opened, resolved });
@@ -267,7 +333,10 @@ function BugTrendChart({
 }: {
   data: { label: string; opened: number; resolved: number }[];
 }) {
-  const maxVal = Math.max(...data.map((d) => Math.max(d.opened, d.resolved)), 1);
+  const maxVal = Math.max(
+    ...data.map((d) => Math.max(d.opened, d.resolved)),
+    1
+  );
   const barHeight = 80;
 
   return (
@@ -293,12 +362,15 @@ function BugTrendChart({
                   style={{ height: `${resolvedH}px` }}
                 />
               )}
-              {/* Tooltip */}
               {(day.opened > 0 || day.resolved > 0) && (
                 <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-surface border border-card-border rounded px-2 py-1 text-[10px] whitespace-nowrap hidden group-hover:block z-10">
                   <p className="font-medium">{day.label}</p>
-                  {day.opened > 0 && <p className="text-accent-pink">{day.opened} opened</p>}
-                  {day.resolved > 0 && <p className="text-accent">{day.resolved} resolved</p>}
+                  {day.opened > 0 && (
+                    <p className="text-accent-pink">{day.opened} opened</p>
+                  )}
+                  {day.resolved > 0 && (
+                    <p className="text-accent">{day.resolved} resolved</p>
+                  )}
                 </div>
               )}
             </div>
