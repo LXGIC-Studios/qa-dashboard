@@ -6,7 +6,6 @@ import Link from "next/link";
 import { ArrowLeft, Send } from "lucide-react";
 import {
   getProject,
-  getProfiles,
   getCurrentUser,
   addBug,
 } from "@/lib/store";
@@ -48,7 +47,6 @@ export default function SubmitIssuePage() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -63,19 +61,16 @@ export default function SubmitIssuePage() {
   const [deviceBrowser, setDeviceBrowser] = useState("");
   const [screenshotUrl, setScreenshotUrl] = useState("");
   const [pageScreen, setPageScreen] = useState("");
-  const [assignedTo, setAssignedTo] = useState("");
   const [showPresets, setShowPresets] = useState(false);
 
   useEffect(() => {
     async function load() {
-      const [p, user, profs] = await Promise.all([
+      const [p, user] = await Promise.all([
         getProject(slug),
         getCurrentUser(),
-        getProfiles(),
       ]);
       setProject(p);
       setCurrentUser(user);
-      setProfiles(profs);
       setLoading(false);
     }
     load();
@@ -98,7 +93,6 @@ export default function SubmitIssuePage() {
       device_browser: deviceBrowser || undefined,
       screenshot_url: screenshotUrl || undefined,
       page_screen: pageScreen || undefined,
-      assigned_to: assignedTo || undefined,
       reported_by: currentUser?.id,
       project_id: project.id,
     });
@@ -126,31 +120,31 @@ export default function SubmitIssuePage() {
   }
 
   const inputClass =
-    "w-full bg-surface border border-card-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-colors";
+    "w-full bg-surface border border-card-border rounded-lg px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-colors min-h-[44px]";
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-4 md:space-y-6">
       {/* Header */}
       <div>
         <Link
           href={`/project/${slug}`}
-          className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors mb-4 min-h-[44px] md:min-h-0"
         >
           <ArrowLeft size={14} />
           Back to {project.name}
         </Link>
 
-        <h1 className="text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight">
+        <h1 className="text-xl md:text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight">
           Submit Issue
         </h1>
-        <p className="text-sm text-muted mt-1">
+        <p className="text-xs md:text-sm text-muted mt-1">
           Report an issue for <span className="text-accent">{project.name}</span>
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Title */}
-        <div className="bg-card border border-card-border rounded-xl p-5 space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+        {/* Title & Type & Severity */}
+        <div className="bg-card border border-card-border rounded-xl p-4 md:p-5 space-y-4 md:space-y-5">
           <div>
             <label className="block text-xs font-medium text-muted mb-2">
               Title <span className="text-accent-pink">*</span>
@@ -176,7 +170,7 @@ export default function SubmitIssuePage() {
                   key={t.value}
                   type="button"
                   onClick={() => setType(t.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  className={`px-3 py-2 rounded-full text-xs font-medium transition-all min-h-[40px] ${
                     type === t.value
                       ? "bg-accent text-black"
                       : "bg-surface border border-card-border text-muted hover:text-foreground hover:border-accent/30"
@@ -199,7 +193,7 @@ export default function SubmitIssuePage() {
                   key={s.value}
                   type="button"
                   onClick={() => setSeverity(s.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-2 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 min-h-[40px] ${
                     severity === s.value
                       ? `${s.bg} ${s.value === "low" ? "text-black" : "text-white"}`
                       : "bg-surface border border-card-border text-muted hover:text-foreground hover:border-accent/30"
@@ -228,7 +222,7 @@ export default function SubmitIssuePage() {
         </div>
 
         {/* Details Section */}
-        <div className="bg-card border border-card-border rounded-xl p-5 space-y-5">
+        <div className="bg-card border border-card-border rounded-xl p-4 md:p-5 space-y-4 md:space-y-5">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             Details
           </h3>
@@ -276,7 +270,7 @@ export default function SubmitIssuePage() {
         </div>
 
         {/* Environment & Context */}
-        <div className="bg-card border border-card-border rounded-xl p-5 space-y-5">
+        <div className="bg-card border border-card-border rounded-xl p-4 md:p-5 space-y-4 md:space-y-5">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             Environment & Context
           </h3>
@@ -307,7 +301,7 @@ export default function SubmitIssuePage() {
                         setDeviceBrowser(preset);
                         setShowPresets(false);
                       }}
-                      className="w-full text-left px-3 py-2 text-xs text-muted hover:text-foreground hover:bg-surface transition-colors"
+                      className="w-full text-left px-3 py-2.5 text-xs text-muted hover:text-foreground hover:bg-surface transition-colors min-h-[44px]"
                     >
                       {preset}
                     </button>
@@ -344,30 +338,11 @@ export default function SubmitIssuePage() {
               placeholder="https://..."
             />
           </div>
-
-          {/* Assign To */}
-          <div>
-            <label className="block text-xs font-medium text-muted mb-2">
-              Assign To
-            </label>
-            <select
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Unassigned</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.full_name} ({p.email})
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
         {/* Footer info + Submit */}
-        <div className="bg-card border border-card-border rounded-xl p-5">
-          <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="bg-card border border-card-border rounded-xl p-4 md:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="text-xs text-muted-foreground space-y-1">
               <p>
                 Reported by:{" "}
@@ -386,7 +361,7 @@ export default function SubmitIssuePage() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold rounded-xl bg-accent text-black hover:bg-accent/90 transition-colors disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3.5 text-sm font-bold rounded-xl bg-accent text-black hover:bg-accent/90 transition-colors disabled:opacity-50 min-h-[48px] w-full sm:w-auto"
             >
               <Send size={16} />
               {submitting ? "Submitting..." : "Submit Issue"}

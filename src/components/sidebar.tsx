@@ -6,8 +6,6 @@ import {
   LayoutDashboard,
   FileBarChart,
   Bug,
-  Menu,
-  X,
   LogOut,
   User,
 } from "lucide-react";
@@ -23,7 +21,6 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const supabase = createClient();
 
@@ -50,30 +47,17 @@ export function Sidebar() {
     router.refresh();
   };
 
+  const isAdmin = profile?.role === "admin";
+
+  // Filter nav items based on role - reports only for admins
+  const visibleNavItems = navItems.filter(
+    (item) => item.href !== "/reports" || isAdmin
+  );
+
   return (
     <>
-      {/* Mobile toggle */}
-      <button
-        onClick={() => setOpen(!open)}
-        className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-lg bg-card border border-card-border"
-      >
-        {open ? <X size={20} /> : <Menu size={20} />}
-      </button>
-
-      {/* Overlay */}
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/50 z-30 md:hidden"
-          onClick={() => setOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-card border-r border-card-border z-40 flex flex-col transition-transform duration-200 ${
-          open ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0`}
-      >
+      {/* Desktop Sidebar - hidden on mobile */}
+      <aside className="fixed top-0 left-0 h-full w-64 bg-card border-r border-card-border z-40 flex-col hidden md:flex">
         <div className="p-6 border-b border-card-border">
           <Link href="/" className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
@@ -91,7 +75,7 @@ export function Sidebar() {
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive =
               item.href === "/"
                 ? pathname === "/"
@@ -100,7 +84,6 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                   isActive
                     ? "bg-accent/10 text-accent"
@@ -139,6 +122,35 @@ export function Sidebar() {
           </button>
         </div>
       </aside>
+
+      {/* Mobile Bottom Tab Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-card-border flex items-center justify-around px-2 md:hidden safe-bottom">
+        {visibleNavItems.map((item) => {
+          const isActive =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex flex-col items-center gap-1 py-3 px-4 min-h-[56px] justify-center transition-colors ${
+                isActive ? "text-accent" : "text-muted"
+              }`}
+            >
+              <item.icon size={20} />
+              <span className="text-[10px] font-medium">{item.label}</span>
+            </Link>
+          );
+        })}
+        <button
+          onClick={handleLogout}
+          className="flex flex-col items-center gap-1 py-3 px-4 min-h-[56px] justify-center text-muted"
+        >
+          <LogOut size={20} />
+          <span className="text-[10px] font-medium">Sign Out</span>
+        </button>
+      </nav>
     </>
   );
 }

@@ -11,12 +11,13 @@ import {
   Bug as BugIcon,
   ClipboardCheck,
   Clock,
-  Pencil,
-  Trash2,
   Shield,
   Send,
   Monitor,
   FileText,
+  Pencil,
+  Trash2,
+  CheckCircle,
 } from "lucide-react";
 import {
   getProject,
@@ -134,6 +135,8 @@ export default function ProjectDetailPage() {
   const health = computeProjectHealth(bugs);
   const isAdmin = currentUser?.role === "admin";
 
+  // Tester tabs: bugs + history only
+  // Admin tabs: bugs, tests, checklist, history, access
   const tabs: {
     id: Tab;
     label: string;
@@ -151,11 +154,12 @@ export default function ProjectDetailPage() {
     },
     {
       id: "tests",
-      label: "Test Cases",
+      label: "Tests",
       icon: FlaskConical,
       count: testCases.length,
+      adminOnly: true,
     },
-    { id: "checklist", label: "Checklist", icon: ClipboardCheck },
+    { id: "checklist", label: "Checklist", icon: ClipboardCheck, adminOnly: true },
     { id: "history", label: "History", icon: Clock },
     { id: "access", label: "Access", icon: Shield, adminOnly: true },
   ];
@@ -168,7 +172,6 @@ export default function ProjectDetailPage() {
     severity: Bug["severity"];
     status: Bug["status"];
     steps_to_reproduce?: string;
-    assigned_to?: string;
     project_id: string;
   }) => {
     if (editingBug) {
@@ -186,6 +189,17 @@ export default function ProjectDetailPage() {
 
   const handleDeleteBug = async (id: string) => {
     await deleteBug(id);
+    refresh();
+  };
+
+  const handleVerifyBug = async (id: string) => {
+    await updateBug(id, { status: "verified" });
+    await addActivityEntry({
+      project_id: project.id,
+      user_id: currentUser?.id,
+      action: "bug-resolved",
+      details: `Verified fix for: ${bugs.find((b) => b.id === id)?.title}`,
+    });
     refresh();
   };
 
@@ -244,22 +258,22 @@ export default function ProjectDetailPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
       <div>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors mb-4 min-h-[44px] md:min-h-0"
         >
           <ArrowLeft size={14} />
           Back to Dashboard
         </Link>
 
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <HealthDot health={health} />
-              <h1 className="text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight">
+              <h1 className="text-xl md:text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight">
                 {project.name}
               </h1>
             </div>
@@ -282,7 +296,7 @@ export default function ProjectDetailPage() {
 
           <Link
             href={`/project/${slug}/submit-issue`}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-xl bg-accent text-black hover:bg-accent/90 transition-colors shrink-0"
+            className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold rounded-xl bg-accent text-black hover:bg-accent/90 transition-colors shrink-0 min-h-[48px] w-full sm:w-auto"
           >
             <Send size={16} />
             Submit Issue
@@ -290,13 +304,13 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-card-border overflow-x-auto">
+      {/* Tabs - horizontally scrollable on mobile */}
+      <div className="flex items-center gap-1 border-b border-card-border overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 scrollbar-none">
         {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2.5 text-xs md:text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-h-[44px] ${
               activeTab === tab.id
                 ? "border-accent text-accent"
                 : "border-transparent text-muted hover:text-foreground"
@@ -318,7 +332,7 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === "tests" && (
+      {activeTab === "tests" && isAdmin && (
         <TestCasesTab
           testCases={testCases}
           onAdd={() => {
@@ -335,8 +349,9 @@ export default function ProjectDetailPage() {
       {activeTab === "bugs" && (
         <BugsTab
           bugs={bugs}
-          profiles={profiles}
           slug={slug}
+          isAdmin={isAdmin}
+          currentUser={currentUser}
           onAdd={() => {
             setEditingBug(null);
             setBugModalOpen(true);
@@ -346,9 +361,10 @@ export default function ProjectDetailPage() {
             setBugModalOpen(true);
           }}
           onDelete={handleDeleteBug}
+          onVerify={handleVerifyBug}
         />
       )}
-      {activeTab === "checklist" && (
+      {activeTab === "checklist" && isAdmin && (
         <ChecklistTab checklist={checklist} onToggle={handleToggleChecklist} />
       )}
       {activeTab === "history" && <HistoryTab activity={activity} />}
@@ -370,7 +386,6 @@ export default function ProjectDetailPage() {
         onSave={handleSaveBug}
         bug={editingBug}
         projectId={project.id}
-        profiles={profiles}
       />
       <TestCaseModal
         open={testModalOpen}
@@ -404,7 +419,7 @@ function TestCasesTab({
         <p className="text-sm text-muted">{testCases.length} test cases</p>
         <button
           onClick={onAdd}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors min-h-[44px]"
         >
           <Plus size={14} />
           Add Test Case
@@ -422,7 +437,7 @@ function TestCasesTab({
           {testCases.map((tc) => (
             <div
               key={tc.id}
-              className="bg-card border border-card-border rounded-lg p-4 flex items-start justify-between gap-4"
+              className="bg-card border border-card-border rounded-lg p-4 flex items-start justify-between gap-3"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -452,13 +467,13 @@ function TestCasesTab({
               <div className="flex items-center gap-1 shrink-0">
                 <button
                   onClick={() => onEdit(tc)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
+                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                 >
                   <Pencil size={14} />
                 </button>
                 <button
                   onClick={() => onDelete(tc.id)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-accent-pink hover:bg-surface transition-colors"
+                  className="p-2 rounded-lg text-muted-foreground hover:text-accent-pink hover:bg-surface transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -474,24 +489,33 @@ function TestCasesTab({
 /* ===== Bugs Tab ===== */
 function BugsTab({
   bugs,
-  profiles,
   slug,
+  isAdmin,
+  currentUser,
   onAdd,
   onEdit,
   onDelete,
+  onVerify,
 }: {
   bugs: Bug[];
-  profiles: Profile[];
   slug: string;
+  isAdmin: boolean;
+  currentUser: Profile | null;
   onAdd: () => void;
   onEdit: (bug: Bug) => void;
   onDelete: (id: string) => void;
+  onVerify: (id: string) => void;
 }) {
   const [filterType, setFilterType] = useState<BugType | "all">("all");
   const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
   const [filterStatus, setFilterStatus] = useState<BugStatus | "all">("all");
 
-  const filteredBugs = bugs.filter((bug) => {
+  // Testers only see their own tickets
+  const userBugs = isAdmin
+    ? bugs
+    : bugs.filter((b) => b.reported_by === currentUser?.id);
+
+  const filteredBugs = userBugs.filter((bug) => {
     if (filterType !== "all" && (bug.type || "bug") !== filterType) return false;
     if (filterSeverity !== "all" && bug.severity !== filterSeverity) return false;
     if (filterStatus !== "all" && bug.status !== filterStatus) return false;
@@ -499,12 +523,13 @@ function BugsTab({
   });
 
   const filterSelectClass =
-    "bg-surface border border-card-border rounded-lg px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent/50";
+    "bg-surface border border-card-border rounded-lg px-2 py-2 text-xs text-foreground focus:outline-none focus:border-accent/50 min-h-[44px]";
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-col gap-3 mb-4">
+        {/* Filters - scrollable row on mobile */}
+        <div className="flex items-center gap-2 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 scrollbar-none">
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value as BugType | "all")}
@@ -542,96 +567,118 @@ function BugsTab({
             <option value="open">Open</option>
             <option value="in-progress">In Progress</option>
             <option value="resolved">Resolved</option>
+            <option value="verified">Verified</option>
             <option value="wont-fix">Won&apos;t Fix</option>
           </select>
-          <span className="text-xs text-muted">
+          <span className="text-xs text-muted whitespace-nowrap">
             {filteredBugs.length} issue{filteredBugs.length !== 1 ? "s" : ""}
           </span>
         </div>
+        {/* Action buttons */}
         <div className="flex items-center gap-2">
           <Link
             href={`/project/${slug}/submit-issue`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors min-h-[44px]"
           >
             <Send size={14} />
             Submit Issue
           </Link>
-          <button
-            onClick={onAdd}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors"
-          >
-            <Plus size={14} />
-            Quick Add
-          </button>
+          {isAdmin && (
+            <button
+              onClick={onAdd}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors min-h-[44px]"
+            >
+              <Plus size={14} />
+              Quick Add
+            </button>
+          )}
         </div>
       </div>
 
       {filteredBugs.length === 0 ? (
         <EmptyState
-          message={bugs.length === 0 ? "No issues reported" : "No issues match filters"}
+          message={userBugs.length === 0 ? "No issues reported" : "No issues match filters"}
           onAction={onAdd}
           actionLabel="Report first issue"
         />
       ) : (
         <div className="space-y-2">
           {filteredBugs.map((bug) => {
-            const assignedProfile = bug.assigned_profile;
             const reportedProfile = bug.reported_profile;
             return (
               <div
                 key={bug.id}
-                className="bg-card border border-card-border rounded-lg p-4 flex items-start justify-between gap-4"
+                className="bg-card border border-card-border rounded-lg p-4"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-sm font-medium">{bug.title}</span>
-                    <BugTypeBadge type={bug.type || "bug"} />
-                    <SeverityBadge severity={bug.severity} />
-                    <BugStatusBadge status={bug.status} />
-                  </div>
-                  <p className="text-xs text-muted mt-1">{bug.description}</p>
-                  {bug.steps_to_reproduce && (
-                    <div className="mt-2 p-2 bg-surface rounded text-xs text-muted-foreground whitespace-pre-line">
-                      {bug.steps_to_reproduce}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-sm font-medium">{bug.title}</span>
+                      <BugTypeBadge type={bug.type || "bug"} />
+                      <SeverityBadge severity={bug.severity} />
+                      <BugStatusBadge status={bug.status} />
                     </div>
-                  )}
-                  <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground flex-wrap">
-                    {bug.device_browser && (
-                      <span className="inline-flex items-center gap-1">
-                        <Monitor size={10} />
-                        {bug.device_browser}
+                    <p className="text-xs text-muted mt-1 line-clamp-2">{bug.description}</p>
+                    {bug.steps_to_reproduce && (
+                      <div className="mt-2 p-2 bg-surface rounded text-xs text-muted-foreground whitespace-pre-line line-clamp-3">
+                        {bug.steps_to_reproduce}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground flex-wrap">
+                      {bug.device_browser && (
+                        <span className="inline-flex items-center gap-1">
+                          <Monitor size={10} />
+                          {bug.device_browser}
+                        </span>
+                      )}
+                      {bug.page_screen && (
+                        <span className="inline-flex items-center gap-1">
+                          <FileText size={10} />
+                          {bug.page_screen}
+                        </span>
+                      )}
+                      {reportedProfile && (
+                        <span>By: {reportedProfile.full_name}</span>
+                      )}
+                      {bug.claimed_by && (
+                        <span>Claimed: {bug.claimed_by}</span>
+                      )}
+                      {bug.branch_name && (
+                        <span>Branch: {bug.branch_name}</span>
+                      )}
+                      <span>
+                        {new Date(bug.created_at).toLocaleDateString()}
                       </span>
-                    )}
-                    {bug.page_screen && (
-                      <span className="inline-flex items-center gap-1">
-                        <FileText size={10} />
-                        {bug.page_screen}
-                      </span>
-                    )}
-                    {assignedProfile && (
-                      <span>Assigned: {assignedProfile.full_name}</span>
-                    )}
-                    {reportedProfile && (
-                      <span>By: {reportedProfile.full_name}</span>
-                    )}
-                    <span>
-                      {new Date(bug.created_at).toLocaleDateString()}
-                    </span>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => onEdit(bug)}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={() => onDelete(bug.id)}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-accent-pink hover:bg-surface transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Verify Fix button for resolved tickets */}
+                    {bug.status === "resolved" && (
+                      <button
+                        onClick={() => onVerify(bug.id)}
+                        className="p-2 rounded-lg text-accent hover:bg-accent/10 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        title="Verify Fix"
+                      >
+                        <CheckCircle size={16} />
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={() => onEdit(bug)}
+                          className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => onDelete(bug.id)}
+                          className="p-2 rounded-lg text-muted-foreground hover:text-accent-pink hover:bg-surface transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -675,13 +722,13 @@ function AccessTab({
             return (
               <label
                 key={profile.id}
-                className="flex items-center gap-4 p-4 hover:bg-surface/50 cursor-pointer transition-colors"
+                className="flex items-center gap-4 p-4 hover:bg-surface/50 cursor-pointer transition-colors min-h-[56px]"
               >
                 <input
                   type="checkbox"
                   checked={hasAccess}
                   onChange={() => onToggle(profile.id)}
-                  className="w-4 h-4 rounded border-card-border bg-surface text-accent focus:ring-accent/20 accent-[#00FF66]"
+                  className="w-5 h-5 rounded border-card-border bg-surface text-accent focus:ring-accent/20 accent-[#00FF66]"
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{profile.full_name}</p>
@@ -759,22 +806,22 @@ function ChecklistTab({
         {checklist.map((item) => (
           <label
             key={item.id}
-            className="flex items-center gap-3 p-3 rounded-lg hover:bg-card cursor-pointer transition-colors"
+            className="flex items-center gap-3 p-3 rounded-lg hover:bg-card cursor-pointer transition-colors min-h-[48px]"
           >
             <input
               type="checkbox"
               checked={item.checked}
               onChange={() => onToggle(item.id, item.checked)}
-              className="w-4 h-4 rounded border-card-border bg-surface text-accent focus:ring-accent/20 accent-[#00FF66]"
+              className="w-5 h-5 rounded border-card-border bg-surface text-accent focus:ring-accent/20 accent-[#00FF66]"
             />
             <span
-              className={`text-sm ${
+              className={`text-sm flex-1 ${
                 item.checked ? "text-muted line-through" : "text-foreground"
               }`}
             >
               {item.label}
             </span>
-            <span className="text-[10px] text-muted-foreground ml-auto">
+            <span className="text-[10px] text-muted-foreground">
               {item.category}
             </span>
           </label>
@@ -808,7 +855,7 @@ function HistoryTab({ activity }: { activity: ActivityEntry[] }) {
               label: entry.action,
             };
             return (
-              <div key={entry.id} className="flex gap-4">
+              <div key={entry.id} className="flex gap-3 md:gap-4">
                 <div className="flex flex-col items-center">
                   <div
                     className={`w-2.5 h-2.5 rounded-full ${style.color} mt-1.5`}
@@ -817,8 +864,8 @@ function HistoryTab({ activity }: { activity: ActivityEntry[] }) {
                     <div className="w-px flex-1 bg-card-border" />
                   )}
                 </div>
-                <div className="pb-6 flex-1">
-                  <div className="flex items-center gap-2 mb-0.5">
+                <div className="pb-6 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                     <span className="text-[10px] font-medium text-muted uppercase">
                       {style.label}
                     </span>
@@ -831,7 +878,7 @@ function HistoryTab({ activity }: { activity: ActivityEntry[] }) {
                       {new Date(entry.created_at).toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-sm">{entry.details}</p>
+                  <p className="text-sm break-words">{entry.details}</p>
                 </div>
               </div>
             );
@@ -857,7 +904,7 @@ function EmptyState({
       <p className="text-sm text-muted mb-3">{message}</p>
       <button
         onClick={onAction}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors"
+        className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors min-h-[44px]"
       >
         <Plus size={14} />
         {actionLabel}

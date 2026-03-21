@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Modal } from "./modal";
-import type { Bug, Severity, BugStatus, Profile } from "@/lib/types";
+import type { Bug, Severity, BugStatus } from "@/lib/types";
 
 interface BugModalProps {
   open: boolean;
@@ -13,12 +13,10 @@ interface BugModalProps {
     severity: Severity;
     status: BugStatus;
     steps_to_reproduce?: string;
-    assigned_to?: string;
     project_id: string;
   }) => void;
   bug?: Bug | null;
   projectId?: string;
-  profiles?: Profile[];
 }
 
 export function BugModal({
@@ -27,14 +25,12 @@ export function BugModal({
   onSave,
   bug,
   projectId,
-  profiles = [],
 }: BugModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState<Severity>("medium");
   const [status, setStatus] = useState<BugStatus>("open");
   const [stepsToReproduce, setStepsToReproduce] = useState("");
-  const [assignedTo, setAssignedTo] = useState("");
 
   useEffect(() => {
     if (bug) {
@@ -43,14 +39,12 @@ export function BugModal({
       setSeverity(bug.severity);
       setStatus(bug.status);
       setStepsToReproduce(bug.steps_to_reproduce || "");
-      setAssignedTo(bug.assigned_to || "");
     } else {
       setTitle("");
       setDescription("");
       setSeverity("medium");
       setStatus("open");
       setStepsToReproduce("");
-      setAssignedTo("");
     }
   }, [bug, open]);
 
@@ -62,14 +56,13 @@ export function BugModal({
       severity,
       status,
       steps_to_reproduce: stepsToReproduce || undefined,
-      assigned_to: assignedTo || undefined,
       project_id: projectId || bug?.project_id || "",
     });
     onClose();
   };
 
   const inputClass =
-    "w-full bg-surface border border-card-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20";
+    "w-full bg-surface border border-card-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 min-h-[44px]";
 
   return (
     <Modal open={open} onClose={onClose} title={bug ? "Edit Bug" : "New Bug"}>
@@ -129,6 +122,7 @@ export function BugModal({
               <option value="open">Open</option>
               <option value="in-progress">In Progress</option>
               <option value="resolved">Resolved</option>
+              <option value="verified">Verified</option>
               <option value="wont-fix">Won&apos;t Fix</option>
             </select>
           </div>
@@ -146,35 +140,17 @@ export function BugModal({
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1.5">
-            Assign To
-          </label>
-          <select
-            value={assignedTo}
-            onChange={(e) => setAssignedTo(e.target.value)}
-            className={inputClass}
-          >
-            <option value="">Unassigned</option>
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.full_name} ({p.email})
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors"
+            className="px-4 py-2.5 text-sm rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors min-h-[44px]"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm rounded-lg bg-accent text-black font-medium hover:bg-accent/90 transition-colors"
+            className="px-4 py-2.5 text-sm rounded-lg bg-accent text-black font-medium hover:bg-accent/90 transition-colors min-h-[44px]"
           >
             {bug ? "Update Bug" : "Create Bug"}
           </button>

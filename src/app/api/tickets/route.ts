@@ -24,6 +24,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const projectSlug = searchParams.get("project");
   const status = searchParams.get("status");
+  const severity = searchParams.get("severity");
+  const type = searchParams.get("type");
+
+  const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
 
   let query = supabase
     .from("bugs")
@@ -32,6 +36,14 @@ export async function GET(request: NextRequest) {
 
   if (status) {
     query = query.eq("status", status);
+  }
+
+  if (severity) {
+    query = query.eq("severity", severity);
+  }
+
+  if (type) {
+    query = query.eq("type", type);
   }
 
   if (projectSlug) {
@@ -66,6 +78,10 @@ export async function GET(request: NextRequest) {
     page_screen: string | null;
     screenshot_url: string | null;
     resolution_note: string | null;
+    claimed_by: string | null;
+    branch_name: string | null;
+    claimed_at: string | null;
+    resolved_at: string | null;
     created_at: string;
     project: {
       name: string;
@@ -78,7 +94,15 @@ export async function GET(request: NextRequest) {
     } | null;
   }
 
-  const tickets = (data as RawTicket[]).map((ticket) => ({
+  // Sort by severity (critical first) then created_at
+  const sorted = (data as RawTicket[]).sort((a, b) => {
+    const sevA = severityOrder[a.severity as keyof typeof severityOrder] ?? 99;
+    const sevB = severityOrder[b.severity as keyof typeof severityOrder] ?? 99;
+    if (sevA !== sevB) return sevA - sevB;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  const tickets = sorted.map((ticket) => ({
     id: ticket.id,
     title: ticket.title,
     type: ticket.type || "bug",
@@ -92,6 +116,10 @@ export async function GET(request: NextRequest) {
     page_screen: ticket.page_screen,
     screenshot_url: ticket.screenshot_url,
     resolution_note: ticket.resolution_note,
+    claimed_by: ticket.claimed_by,
+    branch_name: ticket.branch_name,
+    claimed_at: ticket.claimed_at,
+    resolved_at: ticket.resolved_at,
     project: ticket.project
       ? {
           name: ticket.project.name,

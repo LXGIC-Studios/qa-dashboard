@@ -51,14 +51,14 @@ export default function LoginPage() {
   };
 
   const inputClass =
-    "w-full bg-surface border border-card-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20";
+    "w-full bg-surface border border-card-border rounded-lg px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 min-h-[44px]";
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center mb-4">
-            <Bug size={24} className="text-black" />
+          <div className="w-14 h-14 rounded-xl bg-accent flex items-center justify-center mb-4">
+            <Bug size={28} className="text-black" />
           </div>
           <h1 className="text-xl font-bold font-[family-name:var(--font-heading)] tracking-tight">
             QA Dashboard
@@ -68,7 +68,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="bg-card border border-card-border rounded-xl p-6">
+        <div className="bg-card border border-card-border rounded-xl p-5 md:p-6">
           <h2 className="text-sm font-semibold font-[family-name:var(--font-heading)] mb-4">
             {isSignUp ? "Create Account" : "Sign In"}
           </h2>
@@ -113,7 +113,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 text-sm font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+              className="w-full py-3 text-sm font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 min-h-[48px]"
             >
               {loading && <Loader2 size={14} className="animate-spin" />}
               {isSignUp ? "Create Account" : "Sign In"}
@@ -123,7 +123,7 @@ export default function LoginPage() {
           <div className="mt-4 text-center">
             <button
               onClick={() => { setIsSignUp(!isSignUp); setError(null); }}
-              className="text-xs text-muted hover:text-accent transition-colors"
+              className="text-xs text-muted hover:text-accent transition-colors min-h-[44px]"
             >
               {isSignUp
                 ? "Already have an account? Sign in"

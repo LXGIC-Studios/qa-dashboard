@@ -9,11 +9,14 @@ import {
   getTestCasesByProject,
   computeProjectHealth,
   computeTestPassRate,
+  getCurrentUser,
 } from "@/lib/store";
-import type { Project, Bug, ActivityEntry } from "@/lib/types";
+import type { Project, Bug, ActivityEntry, Profile } from "@/lib/types";
 import { HealthDot, SeverityDot } from "@/components/badges";
+import { useRouter } from "next/navigation";
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [bugs, setBugs] = useState<Bug[]>([]);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
@@ -27,6 +30,13 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function load() {
+      // Check admin access
+      const user = await getCurrentUser();
+      if (user && user.role !== "admin") {
+        router.push("/");
+        return;
+      }
+
       const [projs, allBugs, allActivity] = await Promise.all([
         getProjects(),
         getBugs(),
@@ -75,7 +85,7 @@ export default function ReportsPage() {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (
@@ -102,19 +112,19 @@ export default function ReportsPage() {
   const bugTrend = generateBugTrend(bugs);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <div>
-        <h1 className="text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight">
+        <h1 className="text-xl md:text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight">
           Reports
         </h1>
-        <p className="text-sm text-muted mt-1">
+        <p className="text-xs md:text-sm text-muted mt-1">
           Analytics and trends across all projects
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Bug Trends */}
-        <div className="bg-card border border-card-border rounded-xl p-5">
+        <div className="bg-card border border-card-border rounded-xl p-4 md:p-5">
           <h3 className="text-sm font-semibold font-[family-name:var(--font-heading)] mb-4">
             Bug Activity (Last 30 Days)
           </h3>
@@ -122,7 +132,7 @@ export default function ReportsPage() {
         </div>
 
         {/* Bug Severity Distribution */}
-        <div className="bg-card border border-card-border rounded-xl p-5">
+        <div className="bg-card border border-card-border rounded-xl p-4 md:p-5">
           <h3 className="text-sm font-semibold font-[family-name:var(--font-heading)] mb-4">
             Open Bugs by Severity
           </h3>
@@ -158,7 +168,7 @@ export default function ReportsPage() {
         </div>
 
         {/* Projects by Health */}
-        <div className="bg-card border border-card-border rounded-xl p-5">
+        <div className="bg-card border border-card-border rounded-xl p-4 md:p-5">
           <h3 className="text-sm font-semibold font-[family-name:var(--font-heading)] mb-4">
             Projects by Health Score
           </h3>
@@ -200,7 +210,7 @@ export default function ReportsPage() {
         </div>
 
         {/* Test Coverage */}
-        <div className="bg-card border border-card-border rounded-xl p-5">
+        <div className="bg-card border border-card-border rounded-xl p-4 md:p-5">
           <h3 className="text-sm font-semibold font-[family-name:var(--font-heading)] mb-4">
             Test Coverage per Project
           </h3>
@@ -213,7 +223,7 @@ export default function ReportsPage() {
               {testStats.map((stat) => (
                 <div key={stat.projectName} className="flex items-center gap-3">
                   <span
-                    className="text-xs text-muted w-32 truncate"
+                    className="text-xs text-muted w-24 md:w-32 truncate"
                     title={stat.projectName}
                   >
                     {stat.projectName}
@@ -241,7 +251,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-card border border-card-border rounded-xl p-5">
+      <div className="bg-card border border-card-border rounded-xl p-4 md:p-5">
         <h3 className="text-sm font-semibold font-[family-name:var(--font-heading)] mb-4">
           Recent Activity
         </h3>
@@ -260,8 +270,8 @@ export default function ReportsPage() {
                 >
                   <ActivityDot type={entry.action} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm">{entry.details}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-sm break-words">{entry.details}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {proj && (
                         <span className="text-[10px] text-muted">
                           {proj.name}

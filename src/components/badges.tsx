@@ -69,13 +69,15 @@ export function BugStatusBadge({ status }: { status: BugStatus }) {
   const styles: Record<BugStatus, string> = {
     open: "bg-accent-pink/10 text-accent-pink",
     "in-progress": "bg-yellow-500/10 text-yellow-400",
-    resolved: "bg-accent/10 text-accent",
+    resolved: "bg-accent-blue/10 text-accent-blue",
+    verified: "bg-accent/10 text-accent",
     "wont-fix": "bg-muted/10 text-muted",
   };
   const labels: Record<BugStatus, string> = {
     open: "Open",
     "in-progress": "In Progress",
     resolved: "Resolved",
+    verified: "Verified",
     "wont-fix": "Won't Fix",
   };
   return (

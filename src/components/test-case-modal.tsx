@@ -62,7 +62,7 @@ export function TestCaseModal({
   };
 
   const inputClass =
-    "w-full bg-surface border border-card-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20";
+    "w-full bg-surface border border-card-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 min-h-[44px]";
 
   return (
     <Modal
@@ -149,13 +149,13 @@ export function TestCaseModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors"
+            className="px-4 py-2.5 text-sm rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors min-h-[44px]"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm rounded-lg bg-accent text-black font-medium hover:bg-accent/90 transition-colors"
+            className="px-4 py-2.5 text-sm rounded-lg bg-accent text-black font-medium hover:bg-accent/90 transition-colors min-h-[44px]"
           >
             {testCase ? "Update Test Case" : "Create Test Case"}
           </button>

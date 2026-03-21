@@ -29,7 +29,7 @@ export interface Bug {
   description: string;
   type: BugType;
   severity: "critical" | "high" | "medium" | "low";
-  status: "open" | "in-progress" | "resolved" | "wont-fix";
+  status: "open" | "in-progress" | "resolved" | "verified" | "wont-fix";
   steps_to_reproduce?: string;
   expected_behavior?: string;
   actual_behavior?: string;
@@ -39,6 +39,10 @@ export interface Bug {
   resolution_note?: string;
   assigned_to?: string;
   reported_by?: string;
+  claimed_by?: string;
+  branch_name?: string;
+  claimed_at?: string;
+  resolved_at?: string;
   created_at: string;
   updated_at: string;
   // Joined fields

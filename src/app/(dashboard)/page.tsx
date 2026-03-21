@@ -105,7 +105,7 @@ export default function DashboardPage() {
 
   const statCards = [
     {
-      label: "Total Projects",
+      label: "Projects",
       value: projectCards.length,
       icon: Boxes,
       color: "text-accent",
@@ -117,13 +117,13 @@ export default function DashboardPage() {
       color: totalOpenBugs > 0 ? "text-accent-pink" : "text-accent",
     },
     {
-      label: "Tests Passing",
+      label: "Tests Pass",
       value: `${overallPassRate}%`,
       icon: CheckCircle2,
       color: overallPassRate >= 80 ? "text-accent" : "text-yellow-400",
     },
     {
-      label: "Ready for Release",
+      label: "Release Ready",
       value: readyForRelease,
       icon: Rocket,
       color: "text-accent-blue",
@@ -142,30 +142,31 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <div>
-        <h1 className="text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight">
+        <h1 className="text-xl md:text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight">
           Dashboard
         </h1>
-        <p className="text-sm text-muted mt-1">
+        <p className="text-xs md:text-sm text-muted mt-1">
           QA overview across {isAdmin ? "all" : "your"} LXGIC Studios projects
         </p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stat Cards - 2x2 grid on mobile, 4 columns on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {statCards.map((stat) => (
           <div
             key={stat.label}
-            className="bg-card border border-card-border rounded-xl p-5"
+            className="bg-card border border-card-border rounded-xl p-4 md:p-5"
           >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-muted font-medium">
+            <div className="flex items-center justify-between mb-2 md:mb-3">
+              <span className="text-[10px] md:text-xs text-muted font-medium">
                 {stat.label}
               </span>
               <stat.icon size={16} className={stat.color} />
             </div>
             <p
-              className={`text-2xl font-bold font-[family-name:var(--font-heading)] ${stat.color}`}
+              className={`text-xl md:text-2xl font-bold font-[family-name:var(--font-heading)] ${stat.color}`}
             >
               {stat.value}
             </p>
@@ -173,33 +174,36 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {/* Projects Section */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold font-[family-name:var(--font-heading)]">
+          <h2 className="text-base md:text-lg font-bold font-[family-name:var(--font-heading)]">
             Projects
           </h2>
           {isAdmin && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setGithubModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors min-h-[44px]"
               >
                 <Github size={14} />
-                Import from GitHub
+                <span className="hidden sm:inline">Import from GitHub</span>
+                <span className="sm:hidden">Import</span>
               </button>
               <button
                 onClick={() => setAddProjectModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors min-h-[44px]"
               >
                 <FolderPlus size={14} />
-                Add Manually
+                <span className="hidden sm:inline">Add Manually</span>
+                <span className="sm:hidden">Add</span>
               </button>
             </div>
           )}
         </div>
 
         {projectCards.length === 0 ? (
-          <div className="text-center py-16 bg-card border border-card-border rounded-xl">
+          <div className="text-center py-12 md:py-16 bg-card border border-card-border rounded-xl">
             <Boxes
               size={32}
               className="mx-auto text-muted-foreground mb-3"
@@ -207,7 +211,7 @@ export default function DashboardPage() {
             <p className="text-sm text-muted mb-1">
               {isAdmin ? "No projects yet" : "No projects assigned to you"}
             </p>
-            <p className="text-xs text-muted-foreground mb-4">
+            <p className="text-xs text-muted-foreground mb-4 px-4">
               {isAdmin
                 ? "Import repos from GitHub or add a project manually to get started."
                 : "Ask an admin to grant you access to projects."}
@@ -216,14 +220,14 @@ export default function DashboardPage() {
               <div className="flex items-center justify-center gap-2">
                 <button
                   onClick={() => setGithubModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors min-h-[44px]"
                 >
                   <Github size={14} />
                   Import from GitHub
                 </button>
                 <button
                   onClick={() => setAddProjectModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors min-h-[44px]"
                 >
                   <FolderPlus size={14} />
                   Add Manually
@@ -232,7 +236,7 @@ export default function DashboardPage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
             {projectCards.map((card) => (
               <ProjectCard key={card.project.id} data={card} />
             ))}
@@ -260,7 +264,7 @@ function ProjectCard({ data }: { data: ProjectCardData }) {
   return (
     <Link
       href={`/project/${project.slug}`}
-      className="block bg-card border border-card-border rounded-xl p-5 hover:border-accent/30 transition-all group"
+      className="block bg-card border border-card-border rounded-xl p-4 md:p-5 hover:border-accent/30 transition-all group active:scale-[0.98]"
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
@@ -287,7 +291,7 @@ function ProjectCard({ data }: { data: ProjectCardData }) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-accent-blue hover:bg-surface transition-colors"
+              className="p-2 rounded-lg text-muted-foreground hover:text-accent-blue hover:bg-surface transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
               <ExternalLink size={14} />
             </a>
