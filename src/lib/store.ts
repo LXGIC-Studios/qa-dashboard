@@ -6,6 +6,7 @@ import type {
   ChecklistItem,
   ActivityEntry,
   Profile,
+  ProjectAccess,
 } from "./types";
 import { generateChecklistForProject } from "./seed-data";
 
@@ -34,6 +35,56 @@ export async function getCurrentUser(): Promise<Profile | null> {
     .eq("id", user.id)
     .single();
   return data as Profile | null;
+}
+
+// ============ Project Access ============
+
+export async function getProjectAccess(projectId: string): Promise<ProjectAccess[]> {
+  const { data } = await supabase()
+    .from("project_access")
+    .select("*")
+    .eq("project_id", projectId);
+  return (data as ProjectAccess[]) || [];
+}
+
+export async function grantProjectAccess(
+  projectId: string,
+  userId: string,
+  grantedBy: string
+): Promise<void> {
+  await supabase()
+    .from("project_access")
+    .upsert({ project_id: projectId, user_id: userId, granted_by: grantedBy });
+}
+
+export async function revokeProjectAccess(
+  projectId: string,
+  userId: string
+): Promise<void> {
+  await supabase()
+    .from("project_access")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("user_id", userId);
+}
+
+export async function getAccessibleProjects(user: Profile): Promise<Project[]> {
+  if (user.role === "admin") {
+    return getProjects();
+  }
+  // Testers: only projects they have access to
+  const { data: accessRows } = await supabase()
+    .from("project_access")
+    .select("project_id")
+    .eq("user_id", user.id);
+  if (!accessRows || accessRows.length === 0) return [];
+  const projectIds = accessRows.map((r: { project_id: string }) => r.project_id);
+  const { data } = await supabase()
+    .from("projects")
+    .select("*")
+    .in("id", projectIds)
+    .order("name");
+  return (data as Project[]) || [];
 }
 
 // ============ Projects ============
@@ -97,10 +148,12 @@ export async function addProjects(
 
 // ============ Bugs ============
 
+const BUG_SELECT = "*, assigned_profile:profiles!bugs_assigned_to_fkey(*), reported_profile:profiles!bugs_reported_by_fkey(*)";
+
 export async function getBugs(): Promise<Bug[]> {
   const { data } = await supabase()
     .from("bugs")
-    .select("*, assigned_profile:profiles!bugs_assigned_to_fkey(*), reported_profile:profiles!bugs_reported_by_fkey(*)")
+    .select(BUG_SELECT)
     .order("created_at", { ascending: false });
   return (data as Bug[]) || [];
 }
@@ -108,7 +161,7 @@ export async function getBugs(): Promise<Bug[]> {
 export async function getBugsByProject(projectId: string): Promise<Bug[]> {
   const { data } = await supabase()
     .from("bugs")
-    .select("*, assigned_profile:profiles!bugs_assigned_to_fkey(*), reported_profile:profiles!bugs_reported_by_fkey(*)")
+    .select(BUG_SELECT)
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
   return (data as Bug[]) || [];

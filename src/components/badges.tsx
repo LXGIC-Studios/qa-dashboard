@@ -1,4 +1,4 @@
-import type { Platform, ProjectStatus, Severity, BugStatus, TestStatus, Category } from "@/lib/types";
+import type { Platform, ProjectStatus, Severity, BugStatus, TestStatus, Category, BugType } from "@/lib/types";
 
 export function PlatformBadge({ platform }: { platform: Platform }) {
   const styles: Record<Platform, string> = {
@@ -109,6 +109,30 @@ export function CategoryBadge({ category }: { category: Category }) {
   return (
     <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-surface text-muted capitalize">
       {category}
+    </span>
+  );
+}
+
+export function BugTypeBadge({ type }: { type: BugType }) {
+  const styles: Record<BugType, string> = {
+    bug: "bg-accent-pink/10 text-accent-pink border-accent-pink/20",
+    feature: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    ui: "bg-accent-blue/10 text-accent-blue border-accent-blue/20",
+    performance: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+    security: "bg-red-500/10 text-red-400 border-red-500/20",
+    other: "bg-muted/10 text-muted border-muted/20",
+  };
+  const labels: Record<BugType, string> = {
+    bug: "Bug",
+    feature: "Feature",
+    ui: "UI",
+    performance: "Perf",
+    security: "Security",
+    other: "Other",
+  };
+  return (
+    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${styles[type]}`}>
+      {labels[type]}
     </span>
   );
 }

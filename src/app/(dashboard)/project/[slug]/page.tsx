@@ -13,6 +13,10 @@ import {
   Clock,
   Pencil,
   Trash2,
+  Shield,
+  Send,
+  Monitor,
+  FileText,
 } from "lucide-react";
 import {
   getProject,
@@ -31,6 +35,9 @@ import {
   addActivityEntry,
   getProfiles,
   getCurrentUser,
+  getProjectAccess,
+  grantProjectAccess,
+  revokeProjectAccess,
 } from "@/lib/store";
 import type {
   Project,
@@ -39,12 +46,16 @@ import type {
   ChecklistItem,
   ActivityEntry,
   Profile,
+  BugType,
+  Severity,
+  BugStatus,
 } from "@/lib/types";
 import {
   PlatformBadge,
   StatusBadge,
   SeverityBadge,
   BugStatusBadge,
+  BugTypeBadge,
   TestStatusBadge,
   CategoryBadge,
   HealthDot,
@@ -52,20 +63,21 @@ import {
 import { BugModal } from "@/components/bug-modal";
 import { TestCaseModal } from "@/components/test-case-modal";
 
-type Tab = "tests" | "bugs" | "checklist" | "history";
+type Tab = "tests" | "bugs" | "checklist" | "history" | "access";
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
 
   const [project, setProject] = useState<Project | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("tests");
+  const [activeTab, setActiveTab] = useState<Tab>("bugs");
   const [bugs, setBugs] = useState<Bug[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
+  const [accessUserIds, setAccessUserIds] = useState<string[]>([]);
   const [bugModalOpen, setBugModalOpen] = useState(false);
   const [testModalOpen, setTestModalOpen] = useState(false);
   const [editingBug, setEditingBug] = useState<Bug | null>(null);
@@ -76,13 +88,14 @@ export default function ProjectDetailPage() {
     const p = await getProject(slug);
     if (p) {
       setProject(p);
-      const [b, tc, cl, act, profs, user] = await Promise.all([
+      const [b, tc, cl, act, profs, user, access] = await Promise.all([
         getBugsByProject(p.id),
         getTestCasesByProject(p.id),
         getChecklist(p.id),
         getActivityByProject(p.id),
         getProfiles(),
         getCurrentUser(),
+        getProjectAccess(p.id),
       ]);
       setBugs(b);
       setTestCases(tc);
@@ -90,6 +103,7 @@ export default function ProjectDetailPage() {
       setActivity(act);
       setProfiles(profs);
       setCurrentUser(user);
+      setAccessUserIds(access.map((a) => a.user_id));
     }
     setLoading(false);
   }, [slug]);
@@ -118,30 +132,35 @@ export default function ProjectDetailPage() {
   }
 
   const health = computeProjectHealth(bugs);
+  const isAdmin = currentUser?.role === "admin";
 
   const tabs: {
     id: Tab;
     label: string;
     icon: React.ElementType;
     count?: number;
+    adminOnly?: boolean;
   }[] = [
+    {
+      id: "bugs",
+      label: "Issues",
+      icon: BugIcon,
+      count: bugs.filter(
+        (b) => b.status === "open" || b.status === "in-progress"
+      ).length,
+    },
     {
       id: "tests",
       label: "Test Cases",
       icon: FlaskConical,
       count: testCases.length,
     },
-    {
-      id: "bugs",
-      label: "Bugs",
-      icon: BugIcon,
-      count: bugs.filter(
-        (b) => b.status === "open" || b.status === "in-progress"
-      ).length,
-    },
     { id: "checklist", label: "Checklist", icon: ClipboardCheck },
     { id: "history", label: "History", icon: Clock },
+    { id: "access", label: "Access", icon: Shield, adminOnly: true },
   ];
+
+  const visibleTabs = tabs.filter((t) => !t.adminOnly || isAdmin);
 
   const handleSaveBug = async (bugData: {
     title: string;
@@ -157,6 +176,7 @@ export default function ProjectDetailPage() {
     } else {
       await addBug({
         ...bugData,
+        type: "bug",
         reported_by: currentUser?.id,
       });
     }
@@ -212,6 +232,17 @@ export default function ProjectDetailPage() {
     refresh();
   };
 
+  const handleToggleAccess = async (userId: string) => {
+    if (!currentUser || !project) return;
+    if (accessUserIds.includes(userId)) {
+      await revokeProjectAccess(project.id, userId);
+      setAccessUserIds((prev) => prev.filter((id) => id !== userId));
+    } else {
+      await grantProjectAccess(project.id, userId, currentUser.id);
+      setAccessUserIds((prev) => [...prev, userId]);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -248,12 +279,20 @@ export default function ProjectDetailPage() {
               )}
             </div>
           </div>
+
+          <Link
+            href={`/project/${slug}/submit-issue`}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-xl bg-accent text-black hover:bg-accent/90 transition-colors shrink-0"
+          >
+            <Send size={16} />
+            Submit Issue
+          </Link>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-card-border overflow-x-auto">
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -297,6 +336,7 @@ export default function ProjectDetailPage() {
         <BugsTab
           bugs={bugs}
           profiles={profiles}
+          slug={slug}
           onAdd={() => {
             setEditingBug(null);
             setBugModalOpen(true);
@@ -312,6 +352,13 @@ export default function ProjectDetailPage() {
         <ChecklistTab checklist={checklist} onToggle={handleToggleChecklist} />
       )}
       {activeTab === "history" && <HistoryTab activity={activity} />}
+      {activeTab === "access" && isAdmin && (
+        <AccessTab
+          profiles={profiles}
+          accessUserIds={accessUserIds}
+          onToggle={handleToggleAccess}
+        />
+      )}
 
       {/* Modals */}
       <BugModal
@@ -428,38 +475,106 @@ function TestCasesTab({
 function BugsTab({
   bugs,
   profiles,
+  slug,
   onAdd,
   onEdit,
   onDelete,
 }: {
   bugs: Bug[];
   profiles: Profile[];
+  slug: string;
   onAdd: () => void;
   onEdit: (bug: Bug) => void;
   onDelete: (id: string) => void;
 }) {
+  const [filterType, setFilterType] = useState<BugType | "all">("all");
+  const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
+  const [filterStatus, setFilterStatus] = useState<BugStatus | "all">("all");
+
+  const filteredBugs = bugs.filter((bug) => {
+    if (filterType !== "all" && (bug.type || "bug") !== filterType) return false;
+    if (filterSeverity !== "all" && bug.severity !== filterSeverity) return false;
+    if (filterStatus !== "all" && bug.status !== filterStatus) return false;
+    return true;
+  });
+
+  const filterSelectClass =
+    "bg-surface border border-card-border rounded-lg px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent/50";
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-muted">{bugs.length} bugs</p>
-        <button
-          onClick={onAdd}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent-pink text-white hover:bg-accent-pink/90 transition-colors"
-        >
-          <Plus size={14} />
-          Report Bug
-        </button>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value as BugType | "all")}
+            className={filterSelectClass}
+          >
+            <option value="all">All Types</option>
+            <option value="bug">Bug</option>
+            <option value="feature">Feature</option>
+            <option value="ui">UI</option>
+            <option value="performance">Performance</option>
+            <option value="security">Security</option>
+            <option value="other">Other</option>
+          </select>
+          <select
+            value={filterSeverity}
+            onChange={(e) =>
+              setFilterSeverity(e.target.value as Severity | "all")
+            }
+            className={filterSelectClass}
+          >
+            <option value="all">All Severity</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select
+            value={filterStatus}
+            onChange={(e) =>
+              setFilterStatus(e.target.value as BugStatus | "all")
+            }
+            className={filterSelectClass}
+          >
+            <option value="all">All Status</option>
+            <option value="open">Open</option>
+            <option value="in-progress">In Progress</option>
+            <option value="resolved">Resolved</option>
+            <option value="wont-fix">Won&apos;t Fix</option>
+          </select>
+          <span className="text-xs text-muted">
+            {filteredBugs.length} issue{filteredBugs.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/project/${slug}/submit-issue`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors"
+          >
+            <Send size={14} />
+            Submit Issue
+          </Link>
+          <button
+            onClick={onAdd}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors"
+          >
+            <Plus size={14} />
+            Quick Add
+          </button>
+        </div>
       </div>
 
-      {bugs.length === 0 ? (
+      {filteredBugs.length === 0 ? (
         <EmptyState
-          message="No bugs reported"
+          message={bugs.length === 0 ? "No issues reported" : "No issues match filters"}
           onAction={onAdd}
-          actionLabel="Report first bug"
+          actionLabel="Report first issue"
         />
       ) : (
         <div className="space-y-2">
-          {bugs.map((bug) => {
+          {filteredBugs.map((bug) => {
             const assignedProfile = bug.assigned_profile;
             const reportedProfile = bug.reported_profile;
             return (
@@ -470,6 +585,7 @@ function BugsTab({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className="text-sm font-medium">{bug.title}</span>
+                    <BugTypeBadge type={bug.type || "bug"} />
                     <SeverityBadge severity={bug.severity} />
                     <BugStatusBadge status={bug.status} />
                   </div>
@@ -479,15 +595,26 @@ function BugsTab({
                       {bug.steps_to_reproduce}
                     </div>
                   )}
-                  <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+                  <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground flex-wrap">
+                    {bug.device_browser && (
+                      <span className="inline-flex items-center gap-1">
+                        <Monitor size={10} />
+                        {bug.device_browser}
+                      </span>
+                    )}
+                    {bug.page_screen && (
+                      <span className="inline-flex items-center gap-1">
+                        <FileText size={10} />
+                        {bug.page_screen}
+                      </span>
+                    )}
                     {assignedProfile && (
-                      <span>Assigned to: {assignedProfile.full_name}</span>
+                      <span>Assigned: {assignedProfile.full_name}</span>
                     )}
                     {reportedProfile && (
-                      <span>Reported by: {reportedProfile.full_name}</span>
+                      <span>By: {reportedProfile.full_name}</span>
                     )}
                     <span>
-                      Created:{" "}
                       {new Date(bug.created_at).toLocaleDateString()}
                     </span>
                   </div>
@@ -511,6 +638,92 @@ function BugsTab({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ===== Access Tab ===== */
+function AccessTab({
+  profiles,
+  accessUserIds,
+  onToggle,
+}: {
+  profiles: Profile[];
+  accessUserIds: string[];
+  onToggle: (userId: string) => void;
+}) {
+  const testers = profiles.filter((p) => p.role === "tester");
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold mb-1">Manage Access</h3>
+        <p className="text-xs text-muted">
+          Select which testers can access this project. Admins always have
+          access.
+        </p>
+      </div>
+
+      {testers.length === 0 ? (
+        <div className="text-center py-12 bg-card border border-card-border rounded-xl">
+          <p className="text-sm text-muted">No testers registered yet</p>
+        </div>
+      ) : (
+        <div className="bg-card border border-card-border rounded-xl divide-y divide-card-border">
+          {testers.map((profile) => {
+            const hasAccess = accessUserIds.includes(profile.id);
+            return (
+              <label
+                key={profile.id}
+                className="flex items-center gap-4 p-4 hover:bg-surface/50 cursor-pointer transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={hasAccess}
+                  onChange={() => onToggle(profile.id)}
+                  className="w-4 h-4 rounded border-card-border bg-surface text-accent focus:ring-accent/20 accent-[#00FF66]"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{profile.full_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {profile.email}
+                  </p>
+                </div>
+                <span
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                    hasAccess
+                      ? "bg-accent/10 text-accent"
+                      : "bg-surface text-muted"
+                  }`}
+                >
+                  {hasAccess ? "Has Access" : "No Access"}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="mt-4 p-4 bg-card border border-card-border rounded-xl">
+        <h4 className="text-xs font-semibold text-muted mb-2">
+          Admins (always have access)
+        </h4>
+        <div className="space-y-2">
+          {profiles
+            .filter((p) => p.role === "admin")
+            .map((admin) => (
+              <div key={admin.id} className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center">
+                  <Shield size={12} className="text-accent" />
+                </div>
+                <span className="text-xs">
+                  {admin.full_name}{" "}
+                  <span className="text-muted-foreground">({admin.email})</span>
+                </span>
+              </div>
+            ))}
+        </div>
+      </div>
     </div>
   );
 }

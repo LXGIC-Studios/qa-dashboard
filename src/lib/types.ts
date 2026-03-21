@@ -27,9 +27,16 @@ export interface Bug {
   project_id: string;
   title: string;
   description: string;
+  type: BugType;
   severity: "critical" | "high" | "medium" | "low";
   status: "open" | "in-progress" | "resolved" | "wont-fix";
   steps_to_reproduce?: string;
+  expected_behavior?: string;
+  actual_behavior?: string;
+  device_browser?: string;
+  screenshot_url?: string;
+  page_screen?: string;
+  resolution_note?: string;
   assigned_to?: string;
   reported_by?: string;
   created_at: string;
@@ -75,6 +82,15 @@ export interface ActivityEntry {
   user_profile?: Profile;
 }
 
+export interface ProjectAccess {
+  id: string;
+  project_id: string;
+  user_id: string;
+  granted_by?: string;
+  created_at: string;
+}
+
+export type BugType = "bug" | "feature" | "ui" | "performance" | "security" | "other";
 export type Severity = Bug["severity"];
 export type BugStatus = Bug["status"];
 export type TestStatus = TestCase["status"];
