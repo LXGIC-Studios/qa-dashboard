@@ -8,9 +8,10 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  wide?: boolean;
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps) {
+export function Modal({ open, onClose, title, children, wide }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         if (e.target === overlayRef.current) onClose();
       }}
     >
-      <div className="bg-card border border-card-border rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
+      <div className={`bg-card border border-card-border rounded-xl w-full ${wide ? "max-w-2xl" : "max-w-lg"} max-h-[85vh] overflow-y-auto`}>
         <div className="flex items-center justify-between p-5 border-b border-card-border sticky top-0 bg-card rounded-t-xl">
           <h2 className="text-lg font-bold font-[family-name:var(--font-heading)]">
             {title}

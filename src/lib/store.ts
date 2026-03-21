@@ -1,11 +1,5 @@
 import { Project, Bug, TestCase, ChecklistItem, HistoryEntry } from "./types";
-import {
-  seedProjects,
-  seedBugs,
-  seedTestCases,
-  seedHistory,
-  generateChecklistForProject,
-} from "./seed-data";
+import { generateChecklistForProject } from "./seed-data";
 
 const KEYS = {
   projects: "qa-projects",
@@ -13,7 +7,6 @@ const KEYS = {
   testCases: "qa-test-cases",
   checklist: "qa-checklist",
   history: "qa-history",
-  initialized: "qa-initialized",
 } as const;
 
 function getItem<T>(key: string, fallback: T): T {
@@ -32,21 +25,7 @@ function setItem<T>(key: string, value: T): void {
 }
 
 export function initializeStore(): void {
-  if (typeof window === "undefined") return;
-  if (localStorage.getItem(KEYS.initialized)) return;
-
-  setItem(KEYS.projects, seedProjects);
-  setItem(KEYS.bugs, seedBugs);
-  setItem(KEYS.testCases, seedTestCases);
-  setItem(KEYS.history, seedHistory);
-
-  // Generate checklists for all projects
-  const allChecklists = seedProjects.flatMap((p) =>
-    generateChecklistForProject(p.id)
-  );
-  setItem(KEYS.checklist, allChecklists);
-
-  localStorage.setItem(KEYS.initialized, "true");
+  // No-op — data starts empty, users add projects via import or manual form
 }
 
 // Projects
@@ -60,6 +39,31 @@ export function getProject(slug: string): Project | undefined {
 
 export function getProjectById(id: string): Project | undefined {
   return getProjects().find((p) => p.id === id);
+}
+
+export function addProject(project: Project): void {
+  const projects = getProjects();
+  projects.push(project);
+  setItem(KEYS.projects, projects);
+
+  // Generate default checklist for the new project
+  const allChecklists = getItem<ChecklistItem[]>(KEYS.checklist, []);
+  const newChecklist = generateChecklistForProject(project.id);
+  setItem(KEYS.checklist, [...allChecklists, ...newChecklist]);
+}
+
+export function addProjects(newProjects: Project[]): void {
+  const projects = getProjects();
+  const allChecklists = getItem<ChecklistItem[]>(KEYS.checklist, []);
+  const newChecklists: ChecklistItem[] = [];
+
+  for (const project of newProjects) {
+    projects.push(project);
+    newChecklists.push(...generateChecklistForProject(project.id));
+  }
+
+  setItem(KEYS.projects, projects);
+  setItem(KEYS.checklist, [...allChecklists, ...newChecklists]);
 }
 
 // Bugs

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Boxes,
@@ -8,6 +8,9 @@ import {
   CheckCircle2,
   Rocket,
   ExternalLink,
+  Plus,
+  Github,
+  FolderPlus,
 } from "lucide-react";
 import {
   getProjects,
@@ -20,14 +23,18 @@ import {
 } from "@/lib/store";
 import type { Project } from "@/lib/types";
 import { PlatformBadge, StatusBadge, SeverityDot, HealthDot } from "@/components/badges";
+import { GitHubImportModal } from "@/components/github-import-modal";
+import { AddProjectModal } from "@/components/add-project-modal";
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [totalOpenBugs, setTotalOpenBugs] = useState(0);
   const [overallPassRate, setOverallPassRate] = useState(0);
   const [readyForRelease, setReadyForRelease] = useState(0);
+  const [githubModalOpen, setGithubModalOpen] = useState(false);
+  const [addProjectModalOpen, setAddProjectModalOpen] = useState(false);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     const projs = getProjects();
     setProjects(projs);
 
@@ -61,6 +68,10 @@ export default function DashboardPage() {
     }
     setReadyForRelease(rfrCount);
   }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const statCards = [
     {
@@ -118,15 +129,71 @@ export default function DashboardPage() {
       </div>
 
       <div>
-        <h2 className="text-lg font-bold font-[family-name:var(--font-heading)] mb-4">
-          Projects
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {projects.map((project) => (
-            <ProjectCard key={project.id} project={project} />
-          ))}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold font-[family-name:var(--font-heading)]">
+            Projects
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setGithubModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors"
+            >
+              <Github size={14} />
+              Import from GitHub
+            </button>
+            <button
+              onClick={() => setAddProjectModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors"
+            >
+              <FolderPlus size={14} />
+              Add Manually
+            </button>
+          </div>
         </div>
+
+        {projects.length === 0 ? (
+          <div className="text-center py-16 bg-card border border-card-border rounded-xl">
+            <Boxes size={32} className="mx-auto text-muted-foreground mb-3" />
+            <p className="text-sm text-muted mb-1">No projects yet</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Import repos from GitHub or add a project manually to get started.
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setGithubModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors"
+              >
+                <Github size={14} />
+                Import from GitHub
+              </button>
+              <button
+                onClick={() => setAddProjectModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors"
+              >
+                <Plus size={14} />
+                Add Manually
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {projects.map((project) => (
+              <ProjectCard key={project.id} project={project} />
+            ))}
+          </div>
+        )}
       </div>
+
+      <GitHubImportModal
+        open={githubModalOpen}
+        onClose={() => setGithubModalOpen(false)}
+        onImported={refresh}
+      />
+      <AddProjectModal
+        open={addProjectModalOpen}
+        onClose={() => setAddProjectModalOpen(false)}
+        onAdded={refresh}
+      />
     </div>
   );
 }
