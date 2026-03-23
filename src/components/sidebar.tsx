@@ -8,6 +8,8 @@ import {
   Bug,
   LogOut,
   User,
+  Zap,
+  Bot,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +17,8 @@ import type { Profile } from "@/lib/types";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dispatch", label: "Dispatch", icon: Zap },
+  { href: "/bots", label: "Bots", icon: Bot },
   { href: "/reports", label: "Reports", icon: FileBarChart },
 ];
 
@@ -61,11 +65,11 @@ export function Sidebar() {
         <div className="p-6 border-b border-card-border">
           <Link href="/" className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-              <Bug size={18} className="text-black" />
+              <Zap size={18} className="text-black" />
             </div>
             <div>
               <h1 className="text-sm font-bold font-[family-name:var(--font-heading)] tracking-tight">
-                QA Dashboard
+                SDN
               </h1>
               <p className="text-[10px] text-muted uppercase tracking-widest">
                 LXGIC Studios

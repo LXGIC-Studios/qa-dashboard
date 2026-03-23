@@ -94,6 +94,61 @@ export interface ProjectAccess {
   created_at: string;
 }
 
+// ============ SDN Types ============
+
+export type BotStatus = "online" | "offline" | "busy";
+export type TicketPriority = "critical" | "high" | "medium" | "low";
+export type TicketStatus = "queued" | "assigned" | "in-progress" | "review" | "done" | "failed";
+export type TicketLogType = "info" | "error" | "progress" | "complete";
+
+export interface Bot {
+  id: string;
+  name: string;
+  endpoint_token: string;
+  status: BotStatus;
+  current_ticket_id?: string;
+  last_seen?: string;
+  created_at: string;
+  // Joined fields
+  current_ticket?: SDNTicket;
+}
+
+export interface SDNTicket {
+  id: string;
+  project_id?: string;
+  title: string;
+  description?: string;
+  github_repo?: string;
+  priority: TicketPriority;
+  status: TicketStatus;
+  assigned_bot_id?: string;
+  prompt?: string;
+  result?: string;
+  branch_name?: string;
+  pr_url?: string;
+  created_by?: string;
+  assigned_at?: string;
+  completed_at?: string;
+  created_at: string;
+  // Joined fields
+  assigned_bot?: Bot;
+  project?: Project;
+  creator?: Profile;
+}
+
+export interface TicketLog {
+  id: string;
+  ticket_id: string;
+  bot_id?: string;
+  message: string;
+  log_type: TicketLogType;
+  created_at: string;
+  // Joined fields
+  bot?: Bot;
+}
+
+// ============ QA Types ============
+
 export type BugType = "bug" | "feature" | "ui" | "performance" | "security" | "other";
 export type Severity = Bug["severity"];
 export type BugStatus = Bug["status"];

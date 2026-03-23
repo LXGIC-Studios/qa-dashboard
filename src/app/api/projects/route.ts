@@ -62,3 +62,22 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(result);
 }
+
+export async function DELETE(request: NextRequest) {
+  const supabase = getServiceClient();
+  const body = await request.json();
+  const { project_id } = body;
+
+  if (!project_id) {
+    return NextResponse.json({ error: "project_id is required" }, { status: 400 });
+  }
+
+  // Cascade delete handles bugs, test_cases, checklist_items, activity_log, tickets
+  const { error } = await supabase.from("projects").delete().eq("id", project_id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}

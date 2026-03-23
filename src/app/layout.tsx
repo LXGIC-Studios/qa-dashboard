@@ -13,8 +13,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "QA Dashboard | LXGIC Studios",
-  description: "Internal QA tracking dashboard for LXGIC Studios projects",
+  title: "SDN | LXGIC Studios",
+  description: "Software Development Network - AI-powered ticket dispatch for LXGIC Studios",
   other: {
     "viewport": "width=device-width, initial-scale=1, viewport-fit=cover",
   },

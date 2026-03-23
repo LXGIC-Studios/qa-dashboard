@@ -10,6 +10,9 @@ import {
   ExternalLink,
   Github,
   FolderPlus,
+  Zap,
+  Bot as BotIcon,
+  Trash2,
 } from "lucide-react";
 import {
   getProjects,
@@ -22,12 +25,15 @@ import {
   getCurrentUser,
   getAccessibleProjects,
 } from "@/lib/store";
-import type { Project, Bug as BugType, TestCase, Profile } from "@/lib/types";
+import type { Project, Bug as BugType, TestCase, Profile, Bot, SDNTicket } from "@/lib/types";
 import {
   PlatformBadge,
   StatusBadge,
   SeverityDot,
   HealthDot,
+  BotStatusDot,
+  TicketStatusBadge,
+  TicketPriorityBadge,
 } from "@/components/badges";
 import { GitHubImportModal } from "@/components/github-import-modal";
 import { AddProjectModal } from "@/components/add-project-modal";
@@ -49,6 +55,19 @@ export default function DashboardPage() {
   const [addProjectModalOpen, setAddProjectModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bots, setBots] = useState<Bot[]>([]);
+  const [recentTickets, setRecentTickets] = useState<SDNTicket[]>([]);
+
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      const res = await fetch("/api/projects", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId }),
+      });
+      if (res.ok) refresh();
+    } catch { /* ignore */ }
+  };
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -94,6 +113,22 @@ export default function DashboardPage() {
       allRun > 0 ? Math.round((allPassed / allRun) * 100) : 100
     );
     setReadyForRelease(rfrCount);
+
+    // Fetch SDN data
+    try {
+      const [botsRes, ticketsRes] = await Promise.all([
+        fetch("/api/bots"),
+        fetch("/api/sdn/tickets"),
+      ]);
+      if (botsRes.ok) setBots(await botsRes.json());
+      if (ticketsRes.ok) {
+        const allTickets = await ticketsRes.json();
+        setRecentTickets(allTickets.slice(0, 5));
+      }
+    } catch {
+      // SDN data is supplementary, don't fail the dashboard
+    }
+
     setLoading(false);
   }, []);
 
@@ -148,7 +183,7 @@ export default function DashboardPage() {
           Dashboard
         </h1>
         <p className="text-xs md:text-sm text-muted mt-1">
-          QA overview across {isAdmin ? "all" : "your"} LXGIC Studios projects
+          SDN overview across {isAdmin ? "all" : "your"} LXGIC Studios projects
         </p>
       </div>
 
@@ -172,6 +207,92 @@ export default function DashboardPage() {
             </p>
           </div>
         ))}
+      </div>
+
+      {/* SDN Section - Bot Status & Recent Tickets */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base md:text-lg font-bold font-[family-name:var(--font-heading)]">
+            SDN Dispatch
+          </h2>
+          <Link
+            href="/dispatch"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors min-h-[44px]"
+          >
+            <Zap size={14} />
+            Dispatch Ticket
+          </Link>
+        </div>
+
+        {/* Bot Status Cards */}
+        {bots.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+            {bots.map((bot) => (
+              <div
+                key={bot.id}
+                className="bg-card border border-card-border rounded-xl p-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-surface flex items-center justify-center">
+                    <BotIcon size={16} className="text-muted" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold truncate">{bot.name}</span>
+                      <BotStatusDot status={bot.status} />
+                    </div>
+                    <p className="text-[10px] text-muted capitalize">{bot.status}</p>
+                  </div>
+                </div>
+                {bot.status === "busy" && bot.current_ticket && (
+                  <div className="mt-3 pt-3 border-t border-card-border">
+                    <p className="text-[10px] text-muted mb-1">Working on:</p>
+                    <p className="text-xs truncate">{bot.current_ticket.title}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Recent Tickets */}
+        {recentTickets.length > 0 ? (
+          <div className="bg-card border border-card-border rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-card-border">
+              <h3 className="text-xs font-semibold text-muted">Recent Tickets</h3>
+            </div>
+            <div className="divide-y divide-card-border">
+              {recentTickets.map((ticket) => (
+                <Link
+                  key={ticket.id}
+                  href="/dispatch"
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-surface/50 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{ticket.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <TicketStatusBadge status={ticket.status} />
+                      <TicketPriorityBadge priority={ticket.priority} />
+                      {ticket.assigned_bot && (
+                        <span className="text-[10px] text-muted">
+                          {ticket.assigned_bot.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-muted shrink-0">
+                    {formatDate(ticket.created_at)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 bg-card border border-card-border rounded-xl">
+            <Zap size={24} className="mx-auto text-muted-foreground mb-2" />
+            <p className="text-xs text-muted">No tickets dispatched yet</p>
+          </div>
+        )}
       </div>
 
       {/* Projects Section */}
@@ -238,7 +359,7 @@ export default function DashboardPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
             {projectCards.map((card) => (
-              <ProjectCard key={card.project.id} data={card} />
+              <ProjectCard key={card.project.id} data={card} onDelete={handleDeleteProject} />
             ))}
           </div>
         )}
@@ -258,7 +379,7 @@ export default function DashboardPage() {
   );
 }
 
-function ProjectCard({ data }: { data: ProjectCardData }) {
+function ProjectCard({ data, onDelete }: { data: ProjectCardData; onDelete: (id: string) => void }) {
   const { project, health, bugCounts, passRate, openIssues } = data;
 
   return (
@@ -296,6 +417,19 @@ function ProjectCard({ data }: { data: ProjectCardData }) {
               <ExternalLink size={14} />
             </a>
           )}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (confirm(`Delete "${project.name}"? Bugs, test cases, and checklists will also be removed.`)) {
+                onDelete(project.id);
+              }
+            }}
+            className="p-2 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-surface transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center opacity-0 group-hover:opacity-100"
+            title="Delete project"
+          >
+            <Trash2 size={14} />
+          </button>
         </div>
       </div>
 

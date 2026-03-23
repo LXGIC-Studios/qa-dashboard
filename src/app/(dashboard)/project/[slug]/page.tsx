@@ -18,6 +18,7 @@ import {
   Pencil,
   Trash2,
   CheckCircle,
+  Zap,
 } from "lucide-react";
 import {
   getProject,
@@ -84,6 +85,7 @@ export default function ProjectDetailPage() {
   const [editingBug, setEditingBug] = useState<Bug | null>(null);
   const [editingTest, setEditingTest] = useState<TestCase | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dispatchResult, setDispatchResult] = useState<{ botName: string; ticketTitle: string } | null>(null);
 
   const refresh = useCallback(async () => {
     const p = await getProject(slug);
@@ -177,11 +179,37 @@ export default function ProjectDetailPage() {
     if (editingBug) {
       await updateBug(editingBug.id, bugData);
     } else {
+      // Save bug locally AND dispatch to SDN
       await addBug({
         ...bugData,
         type: "bug",
         reported_by: currentUser?.id,
       });
+
+      // Auto-dispatch to an available bot
+      try {
+        const res = await fetch("/api/dispatch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: project?.id,
+            title: bugData.title,
+            description: `${bugData.description}${bugData.steps_to_reproduce ? '\n\nSteps to reproduce:\n' + bugData.steps_to_reproduce : ''}`,
+            github_repo: project?.github_url,
+            priority: bugData.severity,
+            created_by: currentUser?.id,
+          }),
+        });
+        if (res.ok) {
+          const ticket = await res.json();
+          const botName = ticket.assigned_bot?.name || null;
+          setDispatchResult({
+            botName: botName || "queued (no bots online)",
+            ticketTitle: bugData.title,
+          });
+          setTimeout(() => setDispatchResult(null), 5000);
+        }
+      } catch { /* dispatch failed silently, bug still saved */ }
     }
     setEditingBug(null);
     refresh();
@@ -294,15 +322,25 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          <Link
-            href={`/project/${slug}/submit-issue`}
+          <button
+            onClick={() => { setEditingBug(null); setBugModalOpen(true); }}
             className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold rounded-xl bg-accent text-black hover:bg-accent/90 transition-colors shrink-0 min-h-[48px] w-full sm:w-auto"
           >
-            <Send size={16} />
-            Submit Issue
-          </Link>
+            <Plus size={16} />
+            New Issue
+          </button>
         </div>
       </div>
+
+      {/* Dispatch confirmation */}
+      {dispatchResult && (
+        <div className="bg-accent/10 border border-accent/20 text-accent text-sm rounded-xl px-4 py-3 flex items-center gap-2">
+          <Zap size={16} />
+          <span>
+            <strong>&ldquo;{dispatchResult.ticketTitle}&rdquo;</strong> dispatched → <strong>{dispatchResult.botName}</strong>
+          </span>
+        </div>
+      )}
 
       {/* Tabs - horizontally scrollable on mobile */}
       <div className="flex items-center gap-1 border-b border-card-border overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 scrollbar-none">
@@ -574,25 +612,7 @@ function BugsTab({
             {filteredBugs.length} issue{filteredBugs.length !== 1 ? "s" : ""}
           </span>
         </div>
-        {/* Action buttons */}
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/project/${slug}/submit-issue`}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-accent text-black hover:bg-accent/90 transition-colors min-h-[44px]"
-          >
-            <Send size={14} />
-            Submit Issue
-          </Link>
-          {isAdmin && (
-            <button
-              onClick={onAdd}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-card-border text-muted hover:text-foreground hover:bg-surface transition-colors min-h-[44px]"
-            >
-              <Plus size={14} />
-              Quick Add
-            </button>
-          )}
-        </div>
+        {/* Action buttons removed - use header button */}
       </div>
 
       {filteredBugs.length === 0 ? (

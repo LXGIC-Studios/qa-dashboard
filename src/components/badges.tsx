@@ -1,4 +1,4 @@
-import type { Platform, ProjectStatus, Severity, BugStatus, TestStatus, Category, BugType } from "@/lib/types";
+import type { Platform, ProjectStatus, Severity, BugStatus, TestStatus, Category, BugType, TicketStatus, TicketPriority, BotStatus as BotStatusType } from "@/lib/types";
 
 export function PlatformBadge({ platform }: { platform: Platform }) {
   const styles: Record<Platform, string> = {
@@ -146,4 +146,53 @@ export function HealthDot({ health }: { health: "green" | "yellow" | "red" }) {
     red: "bg-accent-pink shadow-[0_0_6px_rgba(255,0,102,0.5)]",
   };
   return <span className={`inline-block w-2.5 h-2.5 rounded-full ${colors[health]}`} />;
+}
+
+// ============ SDN Badges ============
+
+export function TicketStatusBadge({ status }: { status: TicketStatus }) {
+  const styles: Record<TicketStatus, string> = {
+    queued: "bg-zinc-500/10 text-zinc-400",
+    assigned: "bg-yellow-500/10 text-yellow-400",
+    "in-progress": "bg-accent-blue/10 text-accent-blue",
+    review: "bg-purple-500/10 text-purple-400",
+    done: "bg-accent/10 text-accent",
+    failed: "bg-accent-pink/10 text-accent-pink",
+  };
+  const labels: Record<TicketStatus, string> = {
+    queued: "Queued",
+    assigned: "Assigned",
+    "in-progress": "In Progress",
+    review: "Review",
+    done: "Done",
+    failed: "Failed",
+  };
+  return (
+    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${styles[status]}`}>
+      {labels[status]}
+    </span>
+  );
+}
+
+export function TicketPriorityBadge({ priority }: { priority: TicketPriority }) {
+  const styles: Record<TicketPriority, string> = {
+    critical: "bg-accent-pink/10 text-accent-pink border-accent-pink/20",
+    high: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+    medium: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+    low: "bg-accent-blue/10 text-accent-blue border-accent-blue/20",
+  };
+  return (
+    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border capitalize ${styles[priority]}`}>
+      {priority}
+    </span>
+  );
+}
+
+export function BotStatusDot({ status }: { status: BotStatusType }) {
+  const colors: Record<BotStatusType, string> = {
+    online: "bg-accent shadow-[0_0_6px_rgba(0,255,102,0.5)]",
+    offline: "bg-zinc-500",
+    busy: "bg-yellow-400 shadow-[0_0_6px_rgba(234,179,8,0.5)]",
+  };
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${colors[status]}`} />;
 }

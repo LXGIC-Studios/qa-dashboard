@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Bug, Loader2 } from "lucide-react";
+import { Zap, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -58,10 +58,10 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 rounded-xl bg-accent flex items-center justify-center mb-4">
-            <Bug size={28} className="text-black" />
+            <Zap size={28} className="text-black" />
           </div>
           <h1 className="text-xl font-bold font-[family-name:var(--font-heading)] tracking-tight">
-            QA Dashboard
+            SDN
           </h1>
           <p className="text-xs text-muted mt-1 uppercase tracking-widest">
             LXGIC Studios
