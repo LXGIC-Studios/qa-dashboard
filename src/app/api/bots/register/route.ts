@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   // If no auth header, allow (dashboard UI call - protected by middleware auth)
 
   const body = await request.json();
-  const { name, endpoint_token } = body;
+  const { name, endpoint_token, webhook_url } = body;
 
   if (!name || !endpoint_token) {
     return NextResponse.json(
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("bots")
-    .insert({ name, endpoint_token, status: "offline" })
+    .insert({ name, endpoint_token, status: "offline", webhook_url: webhook_url || null })
     .select()
     .single();
 

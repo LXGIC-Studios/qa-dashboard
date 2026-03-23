@@ -24,6 +24,7 @@ export default function BotsPage() {
   // Register form
   const [newBotName, setNewBotName] = useState("");
   const [newBotToken, setNewBotToken] = useState("");
+  const [newBotWebhook, setNewBotWebhook] = useState("");
   const [registerError, setRegisterError] = useState("");
   const [registerSuccess, setRegisterSuccess] = useState(false);
   const [origin, setOrigin] = useState("");
@@ -66,12 +67,14 @@ export default function BotsPage() {
         body: JSON.stringify({
           name: newBotName.trim(),
           endpoint_token: newBotToken.trim(),
+          webhook_url: newBotWebhook.trim() || undefined,
         }),
       });
 
       if (res.ok) {
         setNewBotName("");
         setNewBotToken("");
+        setNewBotWebhook("");
         setShowRegister(false);
         setRegisterSuccess(true);
         setTimeout(() => setRegisterSuccess(false), 3000);
@@ -197,7 +200,18 @@ export default function BotsPage() {
               <p className="text-xs text-accent-pink">{registerError}</p>
             )}
 
-            <p className="text-[10px] text-muted-foreground">A unique token and endpoint URL will be generated automatically. You can copy them from the bot card after creation.</p>
+            <div>
+              <label className="block text-xs text-muted mb-1.5">Webhook URL (optional)</label>
+              <input
+                type="url"
+                value={newBotWebhook}
+                onChange={(e) => setNewBotWebhook(e.target.value)}
+                placeholder="https://... (bot gets POSTed when assigned a ticket)"
+                className="w-full bg-surface border border-card-border rounded-lg px-3 py-2.5 text-sm min-h-[44px] placeholder:text-muted-foreground"
+              />
+            </div>
+
+            <p className="text-[10px] text-muted-foreground">Token auto-generated. Webhook URL is optional - if set, the bot gets pinged immediately when a ticket is assigned.</p>
           </form>
         </div>
       )}

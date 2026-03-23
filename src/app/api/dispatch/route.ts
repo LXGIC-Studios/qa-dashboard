@@ -75,6 +75,19 @@ export async function POST(request: NextRequest) {
       log_type: "info",
     });
 
+    // Ping the bot's webhook if configured
+    if (bot.webhook_url) {
+      fetch(bot.webhook_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "ticket_assigned",
+          ticket,
+          bot: { id: bot.id, name: bot.name },
+        }),
+      }).catch(() => { /* fire and forget */ });
+    }
+
     return NextResponse.json({
       ...ticket,
       assigned_bot: { id: bot.id, name: bot.name, status: "busy" },
